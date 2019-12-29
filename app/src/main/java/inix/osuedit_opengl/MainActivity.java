@@ -82,7 +82,7 @@ public class MainActivity extends AppCompatActivity {
 
         new AppUpdater(this)
                 .setUpdateFrom(UpdateFrom.JSON)
-                .setUpdateJSON("https://raw.githubusercontent.com/javiersantos/AppUpdater/master/app/update-changelog.json")
+                .setUpdateJSON("https://raw.githubusercontent.com/inix1257/osuEdit/master/update.json")
                 .start();
 
         if (FFmpeg.getInstance(this).isSupported()) {
