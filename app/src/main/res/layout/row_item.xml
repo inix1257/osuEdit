@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="10dp">
+
+    <View
+        android:id="@+id/status"
+        android:layout_width="8dp"
+        android:layout_height="8dp"
+        android:layout_gravity="center_vertical"
+        android:layout_margin="4dp"
+        android:background="@drawable/circle_green"/>
+
+    <TextView
+        android:id="@+id/offset"
+        android:layout_width="0px"
+        android:layout_height="wrap_content"
+        android:text="Offset"
+        android:layout_weight="2"/>
+
+    <TextView
+        android:id="@+id/value"
+        android:layout_width="0px"
+        android:layout_weight="1"
+        android:layout_height="wrap_content"
+        android:text="value"/>
+
+    <TextView
+        android:id="@+id/kiai"
+        android:visibility="invisible"
+        android:layout_width="0px"
+        android:layout_weight="1"
+        android:text="★"
+        android:layout_height="wrap_content"
+        android:checked="false"/>
+
+
+</LinearLayout>

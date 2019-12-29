@@ -1,0 +1,2 @@
+include ':app', ':Android-Audio', ':FFmpegAndroid', ':hxaudio', ':vitamio'
+project(':FFmpegAndroid').projectDir = new File('FFmpeg-Android/FFmpegAndroid')
