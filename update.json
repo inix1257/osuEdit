@@ -1,9 +1,10 @@
 {
   "latestVersion": "v0.02",
-  "latestVersionCode": 2,
+  "latestVersionCode": 3,
   "url": "https://github.com/inix1257/osuEdit/releases",
   "releaseNotes": [
     "- First",
-    "- Second"
+    "- Second",
+    "- Third"
   ]
 }
