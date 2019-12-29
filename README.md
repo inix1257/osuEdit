@@ -3,7 +3,9 @@ osu! beatmap Editor for Android
 
 Code by [Luscent](https://osu.ppy.sh/users/2688581) ([@luscentos](https://twitter.com/luscentos)) / Design by aly ([@sagwayaya](https://twitter.com/sagwayaya))
 
-## Copyright 2019 Luscent.
+## License
+
+Copyright 2019 Luscent.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
