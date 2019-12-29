@@ -81,8 +81,8 @@ public class MainActivity extends AppCompatActivity {
 
 
         new AppUpdater(this)
-                .setUpdateFrom(UpdateFrom.GITHUB)
-                .setGitHubUserAndRepo("javiersantos", "AppUpdater")
+                .setUpdateFrom(UpdateFrom.JSON)
+                .setUpdateJSON("https://raw.githubusercontent.com/javiersantos/AppUpdater/master/app/update-changelog.json")
                 .start();
 
         if (FFmpeg.getInstance(this).isSupported()) {
