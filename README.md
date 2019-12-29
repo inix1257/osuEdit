@@ -5,6 +5,8 @@ Code by [Luscent](https://osu.ppy.sh/users/2688581) ([@luscentos](https://twitte
 
 Latest version : **v0.02**
 
+available path (android) : /storage/osuEdit
+
 ![](https://i.imgur.com/tBG6LR8.jpg)
 ![](https://i.imgur.com/mXExEsA.jpg)
 
