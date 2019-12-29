@@ -1,10 +1,9 @@
 {
   "latestVersion": "v0.02",
-  "latestVersionCode": 3,
+  "latestVersionCode": 2,
   "url": "https://github.com/inix1257/osuEdit/releases",
   "releaseNotes": [
-    "- First",
-    "- Second",
-    "- Third"
+    "- osu!Edit now supports in-app update",
+    "- to be continued!"
   ]
 }
