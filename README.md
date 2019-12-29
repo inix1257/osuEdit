@@ -12,6 +12,11 @@ https://github.com/bilibili/ijkplayer
 https://github.com/javiersantos/AppUpdater
 
 
+## Support this project
+[Donation (Paypal)](https://paypal.me/inix1257)
+
+You can support this project via above link! All supports are appreciated.
+
 ## License
 
 Copyright 2019 Luscent
