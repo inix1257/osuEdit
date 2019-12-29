@@ -3,13 +3,15 @@ osu! beatmap Editor for Android
 
 Code by [Luscent](https://osu.ppy.sh/users/2688581) ([@luscentos](https://twitter.com/luscentos)) / Design by aly ([@sagwayaya](https://twitter.com/sagwayaya))
 
+Latest version : **v0.02**
+
+![](https://i.imgur.com/tBG6LR8.jpg)
+![](https://i.imgur.com/mXExEsA.jpg)
 
 ## Used libraries
-https://github.com/ChillingVan/android-openGL-canvas
-
-https://github.com/bilibili/ijkplayer
-
-https://github.com/javiersantos/AppUpdater
+https://github.com/ChillingVan/android-openGL-canvas  
+https://github.com/bilibili/ijkplayer  
+https://github.com/javiersantos/AppUpdater  
 
 
 ## Support this project
