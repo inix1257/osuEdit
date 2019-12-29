@@ -92,9 +92,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Vector;
 
-import org.lwjgl.*;
-import org.lwjgl.openal.*;
-
 
 import static inix.osuedit_opengl.AudioStreamPlayer.sampleRate;
 import static inix.osuedit_opengl.EditorActivity._h;
@@ -104,16 +101,8 @@ import static inix.osuedit_opengl.Util.map;
 import static inix.osuedit_opengl.Util.pDistance;
 import static inix.osuedit_opengl.Util.prefLoad;
 
-import cafe.adriel.androidaudioconverter.AndroidAudioConverter;
-import cafe.adriel.androidaudioconverter.callback.IConvertCallback;
-import cafe.adriel.androidaudioconverter.callback.ILoadCallback;
-import cafe.adriel.androidaudioconverter.model.AudioFormat;
 import inix.osuedit_opengl.OnAudioStreamInterface;
 import inix.osuedit_opengl.player.ExtendedPlayer;
-import javazoom.jl.decoder.Bitstream;
-import javazoom.jl.decoder.Decoder;
-import nl.bravobit.ffmpeg.ExecuteBinaryResponseHandler;
-import nl.bravobit.ffmpeg.FFmpeg;
 import tv.danmaku.ijk.media.player.IMediaPlayer;
 import tv.danmaku.ijk.media.player.IjkMediaPlayer;
 //import nl.bravobit.ffmpeg.ExecuteBinaryResponseHandler;
@@ -533,61 +522,6 @@ public class Editor extends GLContinuousView {
 
         paint = new GLPaint();
         initFonts();
-    }
-
-    void mp3Convert(){
-        File input = new File(prefLoad("location"), audioFilename);
-        File output = new File(prefLoad("location"), audioFilename + "_convert");
-        try (InputStream in = new FileInputStream(input)) {
-            try (OutputStream out = new FileOutputStream(output)) {
-                // Transfer bytes from in to out
-                byte[] buf = new byte[1024];
-                int len;
-                while ((len = in.read(buf)) > 0) {
-                    out.write(buf, 0, len);
-                }
-            }
-        }catch(Exception e){
-
-        }
-        AndroidAudioConverter.load(getContext(), new ILoadCallback() {
-            @Override
-            public void onSuccess() {
-                // Great!
-                Log.e("AudioConverter", "Loaded Successfully");
-                File mp3File = new File(prefLoad("location"), audioFilename + "_convert");
-                IConvertCallback callback = new IConvertCallback() {
-                    @Override
-                    public void onSuccess(File convertedFile) {
-
-                        Log.e("ffmpeg", "CONVERT DONE : " + convertedFile.toString());
-                        audioplayerSetup();
-                    }
-                    @Override
-                    public void onFailure(Exception error) {
-                        Log.e("ffmpeg", "CONVERT ERROR : " + error.toString());
-                    }
-                };
-                AndroidAudioConverter.with(getContext())
-                        // Your current audio file
-                        .setFile(mp3File)
-
-                        // Your desired audio format
-                        .setFormat(AudioFormat.MP3)
-
-                        // An callback to know when conversion is finished
-                        .setCallback(callback)
-
-                        // Start conversion
-                        .convert();
-            }
-            @Override
-            public void onFailure(Exception error) {
-                // FFmpeg is not supported by device
-                Log.e("ffmpeg", "Failed to convert");
-            }
-        });
-
     }
 
     void audioplayerSetup(){

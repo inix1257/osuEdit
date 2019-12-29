@@ -61,14 +61,13 @@ public class HitObject {
     public String notetype;
     public String sliderType;
     public Path sliderPath;
-    public int objectNumber; //노트 보여줄때 현재 사용중인 노트 확인하기 위해
 
     boolean isInit = true;
 
     DecimalFormat dec = new DecimalFormat("00000000");
 
     ArrayList<PathPoint> arrPn;
-    Bezier bezier; //베지어 곡선 생성
+    Bezier bezier;
 
     String info;
 
@@ -83,7 +82,7 @@ public class HitObject {
 
         sliderPath = new Path();
 
-        for (int i = 6; i >= 4; i--) { //뉴콤 스킵 횟수
+        for (int i = 6; i >= 4; i--) {
             if (Math.pow(2, i) < type) {
                 NC = true;
                 type -= (int) Math.pow(2, i);
@@ -131,9 +130,6 @@ public class HitObject {
                 slider_P();
             } else if(sliderType.equals("L")) {
                 slider_L();
-                //sliderPath = new Path();
-                //sliderPath.moveTo(top + g*x1, left+g*y1);
-                //sliderPath.lineTo(top + g*(float)calcX, left + g*(float)calcY);
             }else{
                 bezier();
             }
@@ -284,17 +280,13 @@ public class HitObject {
         totalLength = 0;
         arrPn = new ArrayList<>();
         sliderCoordinates = new ArrayList<>();
-        bezier = new Bezier(); //베지어 곡선 생성
+        bezier = new Bezier();
         sliderPath = new Path();
-        if(sliderBody != null){
-            //sliderBody.recycle();
-            //sliderBody = null;
-        }
         int counter = 0;
 
         for (int index = 0; index < sliderPoints.size(); index++) {
             if(index != 0){
-                if (((sliderPoints.get(index).x == sliderPoints.get(index-1).x && sliderPoints.get(index).y == sliderPoints.get(index-1).y) || index == sliderPoints.size() - 1)) { //빨간점이거나 마지막점이면
+                if (((sliderPoints.get(index).x == sliderPoints.get(index-1).x && sliderPoints.get(index).y == sliderPoints.get(index-1).y) || index == sliderPoints.size() - 1)) {
                     if(index ==  sliderPoints.size() - 1){
                         PathPoint _p = new PathPoint();
                         _p.x = sliderPoints.get(index).x;
@@ -303,21 +295,21 @@ public class HitObject {
                     }
 
                     bezier.setBezierN(arrPn);
-                    double muGap = 0.5f / sliderLength; //muGap값이 작을수록 섬세하게 그림
+                    double muGap = 0.5f / sliderLength;
 
                     PathPoint startP = new PathPoint();
                     PathPoint endP = new PathPoint();
                     boolean tmpb = false;
                     double _stLength = 0;
 
-                    for (double mu = 0; mu <= 1; mu += muGap) { //베지어 곡선 공식 적용
+                    for (double mu = 0; mu <= 1; mu += muGap) {
                         startP.x = bezier.getResult().x;
                         startP.y = bezier.getResult().y;
                         bezier.setMu(mu);
                         bezier.bezierCalc();
                         endP.x = bezier.getResult().x;
                         endP.y = bezier.getResult().y;
-                        //if (startP.x == 0 && startP.y == 0 && endP.x == 0 && endP.y == 0) continue;
+
                         if (mu == 0) continue;
 
                         if (Xmin > startP.x || Xmin > endP.x) Xmin = Math.min(startP.x, endP.x);
@@ -346,7 +338,7 @@ public class HitObject {
                         }
 
 
-                        sliderPath.lineTo((float) (left + g * endP.x), (float) (top + g * endP.y)); //베지어 곡선 경로로 그림
+                        sliderPath.lineTo((float) (left + g * endP.x), (float) (top + g * endP.y));
                         totalLength += Math.sqrt(Math.pow(Math.abs(startP.x - endP.x), 2) + Math.pow(Math.abs(startP.y - endP.y), 2));
                         counter++;
                         if (totalLength >= sliderLength) break;
@@ -388,19 +380,13 @@ public class HitObject {
     }
 
     public double getBezierLength() {
-        double _Xmin = w;
-        double _Xmax = 0;
-        double _Ymin = h;
-        double _Ymax = 0;
-        double _endx = 0;
-        double _endy = 0;
         double _totalLength = 0;
         ArrayList<PathPoint> _arrPn = new ArrayList<>();
-        Bezier _bezier = new Bezier(); //베지어 곡선 생성
+        Bezier _bezier = new Bezier();
 
         for (int index = 0; index < sliderPoints.size(); index++) {
             if(index != 0){
-                if (((sliderPoints.get(index).x == sliderPoints.get(index-1).x && sliderPoints.get(index).y == sliderPoints.get(index-1).y) || index == sliderPoints.size() - 1)) { //빨간점이거나 마지막점이면
+                if (((sliderPoints.get(index).x == sliderPoints.get(index-1).x && sliderPoints.get(index).y == sliderPoints.get(index-1).y) || index == sliderPoints.size() - 1)) {
                     if(index ==  sliderPoints.size() - 1){
                         PathPoint _p = new PathPoint();
                         _p.x = sliderPoints.get(index).x;
@@ -408,13 +394,13 @@ public class HitObject {
                         _arrPn.add(_p);
                     }
                     _bezier.setBezierN(_arrPn);
-                    double muGap = 0.5f / sliderLength; //muGap값이 작을수록 섬세하게 그림
+                    double muGap = 0.5f / sliderLength;
 
                     PathPoint startP = new PathPoint();
                     PathPoint endP = new PathPoint();
                     boolean tmpb = false;
 
-                    for (double mu = 0; mu <= 1; mu += muGap) { //베지어 곡선 공식 적용
+                    for (double mu = 0; mu <= 1; mu += muGap) {
                         startP.x = _bezier.getResult().x;
                         startP.y = _bezier.getResult().y;
                         _bezier.setMu(mu);
@@ -424,16 +410,9 @@ public class HitObject {
 
                         if (mu == 0) continue;
 
-                        if (_Xmin > startP.x || _Xmin > endP.x) _Xmin = Math.min(startP.x, endP.x);
-                        if (_Xmax < startP.x || _Xmax < endP.x) _Xmax = Math.max(startP.x, endP.x);
-                        if (_Ymin > startP.y || _Ymin > endP.y) _Ymin = Math.min(startP.y, endP.y);
-                        if (_Ymax < startP.y || _Ymax < endP.y) _Ymax = Math.max(startP.y, endP.y);
-
                         PathPoint p = new PathPoint();
                         p.x = left + g * startP.x;
                         p.y = top + g * startP.y;
-                        _endx = (int) Math.round(startP.x);
-                        _endy = (int) Math.round(startP.y);
 
                         _totalLength += Math.sqrt(Math.pow(Math.abs(startP.x - endP.x), 2) + Math.pow(Math.abs(startP.y - endP.y), 2));
                     }

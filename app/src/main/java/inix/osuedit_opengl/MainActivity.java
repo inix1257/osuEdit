@@ -43,8 +43,6 @@ import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
 
-import nl.bravobit.ffmpeg.FFmpeg;
-
 public class MainActivity extends AppCompatActivity {
 
     private static Context context;
@@ -83,13 +81,9 @@ public class MainActivity extends AppCompatActivity {
         new AppUpdater(this)
                 .setUpdateFrom(UpdateFrom.JSON)
                 .setUpdateJSON("https://raw.githubusercontent.com/inix1257/osuEdit/master/update.json")
+                .setButtonDoNotShowAgain(null)
                 .start();
 
-        if (FFmpeg.getInstance(this).isSupported()) {
-            // ffmpeg is supported
-        } else {
-            // ffmpeg is not supported
-        }
 
         if(android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) checkPermission();
         //requestAudioFocus(MainActivity.this);
