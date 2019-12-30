@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">osuEdit_openGL</string>
+    <string name="app_name">osuEdit</string>
     <string name="title_activity_load">LoadActivity</string>
     <string name="title_activity_editor">EditorActivity</string>
     <string name="title_activity_decode">DecodeActivity</string>

@@ -322,7 +322,7 @@ public class Editor extends GLContinuousView {
     Canvas _canvas;
     Paint _paint;
 
-    String appVersion = "v0.02";
+    String appVersion = "v0.03";
 
     IjkMediaPlayer mp;
 
@@ -1970,7 +1970,7 @@ public class Editor extends GLContinuousView {
         canvas.setAlpha(255);
     }
 
-    int snapPosition(boolean isForward, int position){
+    int snapPosition(boolean isForward, int position){ //t
         int calcPosition = position;
         float opb = (float)(BPM_overall/beatDivisor[beatDivIndex]);
         boolean isSnapped = false;
