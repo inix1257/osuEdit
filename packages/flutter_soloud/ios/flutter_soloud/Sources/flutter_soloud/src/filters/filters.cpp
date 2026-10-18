@@ -1,0 +1,306 @@
+#include "filters.h"
+#include "../soloud_common.h"
+#include "../active_sound.h" // Add this include for complete type definition
+
+#include <cstddef>
+#include <stdarg.h>
+
+#include "../soloud/include/soloud_biquadresonantfilter.h"
+// #include "soloud_duckfilter.h"
+#include "../soloud/include/soloud_echofilter.h"
+#include "../soloud/include/soloud_eqfilter.h"
+#include "../soloud/include/soloud_flangerfilter.h"
+#include "../soloud/include/soloud_lofifilter.h"
+// #include "soloud_dcremovalfilter.h"
+#include "../soloud/include/soloud_bassboostfilter.h"
+#include "../soloud/include/soloud_freeverbfilter.h"
+#include "../soloud/include/soloud_robotizefilter.h"
+#include "../soloud/include/soloud_waveshaperfilter.h"
+#include "pitch_shift_filter.h"
+#include "compressor.h"
+#include "limiter.h"
+#include "parametric_eq_filter.h"
+#include "amplitude_modulator_filter.h"
+
+Filters::Filters(SoLoud::Soloud *soloud, ActiveSound *sound, BusData *busData)
+    : mSoloud(soloud), mSound(sound), mBusData(busData) {}
+
+int Filters::isFilterActive(FilterType filter) {
+  for (int i = 0; i < filters.size(); i++) {
+    if (filters[i].get()->type == filter)
+      return i;
+  }
+  return -1;
+}
+
+std::vector<std::string> Filters::getFilterParamNames(FilterType filterType) {
+  std::vector<std::string> ret;
+  switch (filterType) {
+  case BiquadResonantFilter: {
+    SoLoud::BiquadResonantFilter f;
+    int nParams = f.getParamCount();
+    for (int i = 0; i < nParams; i++) {
+      ret.push_back(f.getParamName(i));
+    }
+  } break;
+  case EchoFilter: {
+    SoLoud::EchoFilter f;
+    int nParams = f.getParamCount();
+    for (int i = 0; i < nParams; i++) {
+      ret.push_back(f.getParamName(i));
+    }
+  } break;
+  case LofiFilter: {
+    SoLoud::LofiFilter f;
+    int nParams = f.getParamCount();
+    for (int i = 0; i < nParams; i++) {
+      ret.push_back(f.getParamName(i));
+    }
+  } break;
+  case FlangerFilter: {
+    SoLoud::FlangerFilter f;
+    int nParams = f.getParamCount();
+    for (int i = 0; i < nParams; i++) {
+      ret.push_back(f.getParamName(i));
+    }
+  } break;
+  case BassboostFilter: {
+    SoLoud::BassboostFilter f;
+    int nParams = f.getParamCount();
+    for (int i = 0; i < nParams; i++) {
+      ret.push_back(f.getParamName(i));
+    }
+  } break;
+  case WaveShaperFilter: {
+    SoLoud::WaveShaperFilter f;
+    int nParams = f.getParamCount();
+    for (int i = 0; i < nParams; i++) {
+      ret.push_back(f.getParamName(i));
+    }
+  } break;
+  case RobotizeFilter: {
+    SoLoud::RobotizeFilter f;
+    int nParams = f.getParamCount();
+    for (int i = 0; i < nParams; i++) {
+      ret.push_back(f.getParamName(i));
+    }
+  } break;
+  case FreeverbFilter: {
+    SoLoud::FreeverbFilter f;
+    int nParams = f.getParamCount();
+    for (int i = 0; i < nParams; i++) {
+      ret.push_back(f.getParamName(i));
+    }
+  } break;
+  case PitchShiftFilter: {
+    PitchShift f;
+    int nParams = f.getParamCount();
+    for (int i = 0; i < nParams; i++) {
+      ret.push_back(f.getParamName(i));
+    }
+  } break;
+  case LimiterFilter: {
+    Limiter f(mSoloud->mSamplerate);
+    int nParams = f.getParamCount();
+    for (int i = 0; i < nParams; i++) {
+      ret.push_back(f.getParamName(i));
+    }
+  } break;
+  case CompressorFilter: {
+    Compressor f(mSoloud->mSamplerate);
+    int nParams = f.getParamCount();
+    for (int i = 0; i < nParams; i++) {
+      ret.push_back(f.getParamName(i));
+    }
+  } break;
+  case ParametricEQFilter: {
+    ParametricEq f(mSoloud);
+    int nParams = f.getParamCount();
+    for (int i = 0; i < nParams; i++) {
+      ret.push_back(f.getParamName(i));
+    }
+  } break;
+  case AmplitudeModulatorFilter: {
+    AmplitudeModulator f;
+    int nParams = f.getParamCount();
+    for (int i = 0; i < nParams; i++) {
+      ret.push_back(f.getParamName(i));
+    }
+  } break;
+  }
+
+  return ret;
+}
+
+PlayerErrors Filters::addFilter(FilterType filterType) {
+  int filtersSize = (int)(filters.size());
+
+  if (filtersSize >= FILTERS_PER_STREAM)
+    return maxNumberOfFiltersReached;
+
+  // Check if the new filter is already here.
+  // Only one kind of filter allowed.
+  if (isFilterActive(filterType) >= 0)
+    return filterAlreadyAdded;
+
+  SoLoud::Filter *newFilter = nullptr;
+  switch (filterType) {
+  case BiquadResonantFilter:
+    newFilter = new SoLoud::BiquadResonantFilter();
+    break;
+    break;
+  case EchoFilter:
+    newFilter = new SoLoud::EchoFilter();
+    break;
+  case LofiFilter:
+    newFilter = new SoLoud::LofiFilter();
+    break;
+  case FlangerFilter:
+    newFilter = new SoLoud::FlangerFilter();
+    break;
+  case BassboostFilter:
+    newFilter = new SoLoud::BassboostFilter();
+    break;
+  case WaveShaperFilter:
+    newFilter = new SoLoud::WaveShaperFilter();
+    break;
+  case RobotizeFilter:
+    newFilter = new SoLoud::RobotizeFilter();
+    break;
+  case FreeverbFilter:
+    newFilter = new SoLoud::FreeverbFilter();
+    break;
+  case PitchShiftFilter:
+    newFilter = new PitchShift();
+    break;
+  case LimiterFilter:
+    newFilter = new Limiter(mSoloud->mSamplerate);
+    break;
+  case CompressorFilter:
+    newFilter = new Compressor(mSoloud->mSamplerate);
+    break;
+  case ParametricEQFilter:
+    newFilter = new ParametricEq(mSoloud);
+    break;
+  case AmplitudeModulatorFilter:
+    newFilter = new AmplitudeModulator();
+    break;
+  default:
+    return filterNotFound;
+  }
+
+  if (mSound == nullptr && mBusData == nullptr) {
+    mSoloud->setGlobalFilter(filtersSize, newFilter);
+  } else if (mSound != nullptr) {
+    mSound->sound.get()->setFilter(filtersSize, newFilter);
+    // Voices snapshot the source filters only when they start playing.
+    // Attach a live instance of the new filter to the voices already
+    // playing this sound so the filter takes effect immediately (e.g.
+    // when re-adding a filter that was just removed).
+    for (const auto &h : mSound->handle) {
+      mSoloud->addVoiceFilter(h.handle, filtersSize, newFilter);
+    }
+  } else {
+    mBusData->bus.setFilter(filtersSize, newFilter);
+  }
+  
+  // Create FilterObject taking ownership of raw pointer
+  std::unique_ptr<FilterObject> nfo =
+    std::make_unique<FilterObject>(filterType, newFilter);
+  filters.push_back(std::move(nfo));
+
+  return noError;
+}
+
+/// TODO remove all filters FilterType.none
+bool Filters::removeFilter(FilterType filterType) {
+  int index = isFilterActive(filterType);
+  if (index < 0)
+    return false;
+
+  if (mSound == nullptr && mBusData == nullptr) {
+    mSoloud->setGlobalFilter(index, 0);
+  } else if (mSound != nullptr) {
+    // Voices playing this sound created their own live instances of this
+    // filter, and those instances keep a reference to the filter object
+    // itself (mParent). Deleting the filter while a voice still holds its
+    // instance is a use-after-free: the audio thread keeps dereferencing
+    // the freed filter (e.g. ParametricEqInstance reads the FFT window
+    // sizes from it and can end up writing out of bounds, corrupting the
+    // heap). Detach (delete + shift down) the live instances from every
+    // active voice of this sound first. This also keeps the voice filter
+    // slots in sync with the filter list shift done below.
+    for (const auto &h : mSound->handle) {
+      mSoloud->removeVoiceFilter(h.handle, index);
+    }
+    mSound->sound.get()->setFilter(index, 0);
+  } else {
+    mBusData->bus.setFilter(index, 0);
+  }
+
+  filters[index].get()->filter.reset();
+
+  /// shift filters down by 1 from [index]
+  for (int i = index; i < filters.size() - 1; i++) {
+    if (mSound == nullptr && mBusData == nullptr) {
+      // Move the live instance along with the filter instead of clearing
+      // and recreating it, so its current parameter values are preserved.
+      mSoloud->moveGlobalFilter(i + 1, i);
+    } else if (mSound != nullptr) {
+      // AudioSource only holds filter pointers; the live instances belong
+      // to the voices and were already shifted by removeVoiceFilter above.
+      mSound->sound.get()->setFilter(i + 1, 0);
+      mSound->sound.get()->setFilter(i, filters[i + 1].get()->filter.get());
+    } else {
+      // Move the live instance along with the filter (see above).
+      mBusData->bus.moveFilter(i + 1, i);
+    }
+  }
+  /// remove the filter from the list
+  filters.erase(filters.begin() + index);
+
+  return true;
+}
+
+void Filters::setFilterParams(SoLoud::handle handle, FilterType filterType,
+                              int attributeId, float value) {
+  int index = isFilterActive(filterType);
+  if (index < 0)
+    return;
+  if (mBusData != nullptr) {
+    /// bus filter
+    mSoloud->setFilterParameter(mBusData->handle, index, attributeId, value);
+  } else {
+    /// global or single sound filter
+    mSoloud->setFilterParameter(handle, index, attributeId, value);
+  }
+}
+
+float Filters::getFilterParams(SoLoud::handle handle, FilterType filterType,
+                               int attributeId) {
+  int index = isFilterActive(filterType);
+  if (index < 0)
+    return 9999.0f;
+
+  float ret = mSoloud->getFilterParameter(handle, index, attributeId);
+  return ret;
+}
+
+void Filters::fadeFilterParameter(SoLoud::handle handle, FilterType filterType,
+                                  int attributeId, float to, float time) {
+  int index = isFilterActive(filterType);
+  if (index < 0)
+    return;
+
+  mSoloud->fadeFilterParameter(handle, index, attributeId, to, time);
+}
+
+void Filters::oscillateFilterParameter(SoLoud::handle handle,
+                                       FilterType filterType, int attributeId,
+                                       float from, float to, float time) {
+  int index = isFilterActive(filterType);
+  if (index < 0)
+    return;
+
+  mSoloud->oscillateFilterParameter(handle, index, attributeId, from, to, time);
+}

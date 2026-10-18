@@ -1,0 +1,63 @@
+# Common SoLoud CMake configuration options
+# This file is shared across all platforms (android, ios, linux, macos, windows).
+
+include (${CMAKE_CURRENT_LIST_DIR}/soloud/contrib/cmake/OptionDependentOnPackage.cmake)
+include (${CMAKE_CURRENT_LIST_DIR}/soloud/contrib/cmake/PrintOptionStatus.cmake)
+
+# Default DYNAMIC/STATIC based on platform.
+# Desktop platforms that produce shared plugins (linux, windows) default to DYNAMIC.
+# Apple platforms use static libs linked into the framework.
+if (APPLE OR ANDROID)
+  set (_DEFAULT_DYNAMIC OFF)
+  set (_DEFAULT_STATIC ON)
+else ()
+  set (_DEFAULT_DYNAMIC ON)
+  set (_DEFAULT_STATIC OFF)
+endif ()
+
+# Default audio backends based on platform.
+# flutter_soloud uses miniaudio exclusively; legacy backends are disabled by default.
+set (_DEFAULT_ALSA OFF)
+set (_DEFAULT_COREAUDIO OFF)
+
+option (SOLOUD_DYNAMIC "Set to ON to build dynamic SoLoud" ${_DEFAULT_DYNAMIC})
+print_option_status (SOLOUD_DYNAMIC "Build dynamic library")
+
+option (SOLOUD_STATIC "Set to ON to build static SoLoud" ${_DEFAULT_STATIC})
+print_option_status (SOLOUD_STATIC "Build static library")
+
+option (SOLOUD_C_API "Set to ON to include the C API" OFF)
+print_option_status (SOLOUD_C_API "Build C API")
+
+option (SOLOUD_BACKEND_MINIAUDIO "Set to ON to include MiniAudio" ON)
+print_option_status (SOLOUD_BACKEND_MINIAUDIO "Build MiniAudio")
+
+option (SOLOUD_BUILD_DEMOS "Set to ON for building demos" OFF)
+print_option_status (SOLOUD_BUILD_DEMOS "Build demos")
+
+option (SOLOUD_BACKEND_NULL "Set to ON for building NULL backend" ON)
+print_option_status (SOLOUD_BACKEND_NULL "NULL backend")
+
+option (SOLOUD_BACKEND_SDL2 "Set to ON for building SDL2 backend" OFF)
+print_option_status (SOLOUD_BACKEND_SDL2 "SDL2 backend")
+
+option (SOLOUD_BACKEND_ALSA "Set to ON for building ALSA backend" ${_DEFAULT_ALSA})
+print_option_status (SOLOUD_BACKEND_ALSA "ALSA backend")
+
+option (SOLOUD_BACKEND_COREAUDIO "Set to ON for building CoreAudio backend" ${_DEFAULT_COREAUDIO})
+print_option_status (SOLOUD_BACKEND_COREAUDIO "CoreAudio backend")
+
+option (SOLOUD_BACKEND_OPENSLES "Set to ON for building OpenSLES backend" OFF)
+print_option_status (SOLOUD_BACKEND_OPENSLES "OpenSLES backend")
+
+option (SOLOUD_BACKEND_XAUDIO2 "Set to ON for building XAudio2 backend" OFF)
+print_option_status (SOLOUD_BACKEND_XAUDIO2 "XAudio2 backend")
+
+option (SOLOUD_BACKEND_WINMM "Set to ON for building WINMM backend" OFF)
+print_option_status (SOLOUD_BACKEND_WINMM "WINMM backend")
+
+option (SOLOUD_BACKEND_WASAPI "Set to ON for building WASAPI backend" OFF)
+print_option_status (SOLOUD_BACKEND_WASAPI "WASAPI backend")
+
+option (SOLOUD_GENERATE_GLUE "Set to ON for generating the Glue APIs" OFF)
+print_option_status (SOLOUD_GENERATE_GLUE "Generate Glue")

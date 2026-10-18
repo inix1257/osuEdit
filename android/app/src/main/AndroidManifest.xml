@@ -1,0 +1,119 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application
+        android:label="osu_edit"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/LaunchTheme"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <!-- Specifies an Android theme to apply to this Activity as soon as
+                 the Android process has started. This theme is visible to the user
+                 while the Flutter UI initializes. After that, this theme continues
+                 to determine the Window background behind the Flutter UI. -->
+            <meta-data
+              android:name="io.flutter.embedding.android.NormalTheme"
+              android:resource="@style/NormalTheme"
+              />
+            <!-- VIEW intents carry .osz content:// URIs that MainActivity
+                 imports itself; without this Flutter also pushes the URI as
+                 a route (no named routes → null-check error in onUnknownRoute). -->
+            <meta-data
+              android:name="flutter_deeplinking_enabled"
+              android:value="false"
+              />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <!-- .osz / .osk (skin) from "Open with" / the share sheet
+                 (MainActivity copies it into the library's Inbox). Providers
+                 rarely expose the file extension, so match the MIME types
+                 these files arrive with. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="content"/>
+                <data android:scheme="file"/>
+                <data android:mimeType="application/x-osu-beatmap-archive"/>
+                <data android:mimeType="application/x-osu-archive"/>
+                <data android:mimeType="application/x-osu-skin-archive"/>
+                <data android:mimeType="application/zip"/>
+                <data android:mimeType="application/octet-stream"/>
+            </intent-filter>
+            <!-- Same for file managers that hand over an unrelated / wildcard
+                 MIME type: match on the .osz / .osk extension instead (the pattern
+                 is case-sensitive and has no "or", hence one entry per
+                 case and per number of dots in the name). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="content"/>
+                <data android:scheme="file"/>
+                <data android:host="*"/>
+                <data android:mimeType="*/*"/>
+                <data android:pathPattern=".*\\.osz"/>
+                <data android:pathPattern=".*\\..*\\.osz"/>
+                <data android:pathPattern=".*\\..*\\..*\\.osz"/>
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.osz"/>
+                <data android:pathPattern=".*\\.OSZ"/>
+                <data android:pathPattern=".*\\..*\\.OSZ"/>
+                <data android:pathPattern=".*\\..*\\..*\\.OSZ"/>
+                <data android:pathPattern=".*\\.osk"/>
+                <data android:pathPattern=".*\\..*\\.osk"/>
+                <data android:pathPattern=".*\\..*\\..*\\.osk"/>
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.osk"/>
+                <data android:pathPattern=".*\\.OSK"/>
+                <data android:pathPattern=".*\\..*\\.OSK"/>
+                <data android:pathPattern=".*\\..*\\..*\\.OSK"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <action android:name="android.intent.action.SEND_MULTIPLE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="application/x-osu-beatmap-archive"/>
+                <data android:mimeType="application/x-osu-archive"/>
+                <data android:mimeType="application/x-osu-skin-archive"/>
+                <data android:mimeType="application/zip"/>
+                <data android:mimeType="application/octet-stream"/>
+            </intent-filter>
+        </activity>
+        <!-- The beatmap library in the system Files app ("Open map folder"). -->
+        <provider
+            android:name=".LibraryDocumentsProvider"
+            android:authorities="${applicationId}.documents"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER"/>
+            </intent-filter>
+        </provider>
+        <!-- Don't delete the meta-data below.
+             This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+    </application>
+    <!-- Required to query activities that can process text, see:
+         https://developer.android.com/training/package-visibility and
+         https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
+
+         In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
+    <queries>
+        <!-- osu!lazer: to open its App info (default-app settings) when installed. -->
+        <package android:name="sh.ppy.osulazer"/>
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT"/>
+            <data android:mimeType="text/plain"/>
+        </intent>
+    </queries>
+</manifest>

@@ -1,0 +1,6 @@
+* text=auto
+# .osu/.osb must round-trip byte-for-byte (CRLF kept as-is)
+*.osu -text
+*.osb -text
+*.osz binary
+*.osk binary

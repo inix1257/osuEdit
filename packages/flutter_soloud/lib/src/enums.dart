@@ -1,0 +1,675 @@
+import 'package:meta/meta.dart';
+
+/// Possible player errors.
+/// New values must be enumerated at the bottom
+///
+/// WARNING: Keep these in sync with `src/enums.h`.
+@internal
+enum PlayerErrors {
+  /// No error
+  noError(0),
+
+  /// Some parameter is invalid
+  invalidParameter(1),
+
+  /// File not found
+  fileNotFound(2),
+
+  /// File found, but could not be loaded
+  fileLoadFailed(3),
+
+  /// The sound file has already been loaded
+  fileAlreadyLoaded(4),
+
+  /// DLL not found, or wrong DLL
+  dllNotFound(5),
+
+  /// Out of memory
+  outOfMemory(6),
+
+  /// Feature not implemented
+  notImplemented(7),
+
+  /// Other error
+  unknownError(8),
+
+  /// null pointer. Could happens when passing a non initialized
+  /// pointer (with calloc()) to retrieve FFT or wave data
+  nullPointer(9),
+
+  /// The sound with specified hash is not found
+  soundHashNotFound(10),
+
+  /// Player not initialized
+  backendNotInited(11),
+
+  /// Filter not found
+  filterNotFound(12),
+
+  /// asking for wave and FFT is not enabled
+  visualizationNotEnabled(13),
+
+  /// The maximum number of filters has been reached (default is 8).
+  maxNumberOfFiltersReached(14),
+
+  /// The filter has already been added.
+  filterAlreadyAdded(15),
+
+  /// Player already inited.
+  playerAlreadyInited(16),
+
+  /// Audio handle is not found
+  soundHandleNotFound(17),
+
+  /// Error getting filter parameter.
+  filterParameterGetError(18),
+
+  /// No playback devices were found.
+  noPlaybackDevicesFound(19),
+
+  /// Trying to add PCM data but the buffer is full or not large
+  /// enough for the needed PCM data. Try increasing the buffer size.
+  /// Or, stream buffer has been set to be ended.
+  pcmBufferFull(20),
+
+  /// Given hash doesn't belong to a buffer stream.
+  hashIsNotABufferStream(21),
+
+  /// Trying to add PCM data but the stream is marked to be ended
+  /// already by the user or when the stream reached its maximum
+  /// capacity, in this case the stream is automatically marked to be ended.
+  streamEndedAlready(22),
+
+  /// Failed to create Opus decoder.
+  failedToCreateOpusDecoder(23),
+
+  /// Failed to decode Opus packet.
+  failedToDecodeOpusPacket(24),
+
+  /// A BufferStream using `release` buffer type can be played only once.
+  bufferStreamCanBePlayedOnlyOnce(25),
+
+  /// The maximum number of active voices has been reached.
+  maxActiveVoiceCountReached(26),
+
+  /// Trying to get time consumed from wrong buffer type.
+  wrongBufferTypeToAskForTimeConsumed(27),
+
+  /// BufferStream with released buffer type cannot be seeked!
+  bufferStreamWithReleasedBufferTypeCannotBeSeeked(28),
+
+  /// Audio format not supported
+  audioFormatNotSupported(29),
+
+  /// Xiph libraries not found.
+  xiphLibsNotFound(30),
+
+  /// Bus id not found.
+  busIdNotFound(31),
+
+  /// Given hash doesn't belong to a pull buffer stream.
+  hashIsNotAPullBufferStream(32),
+
+  /// The pull buffer stream is in an invalid state for this operation.
+  invalidPullBufferState(33),
+
+  /// The output audio device could not be started or resumed.
+  audioDeviceFailedToStart(34),
+
+  /// SoLoud didn't return a valid voice handle when starting the playback.
+  failedToStartPlayback(35);
+
+  const PlayerErrors(this.value);
+
+  /// The integer value of the error. This is the same number that is returned
+  /// from the C++ API.
+  final int value;
+
+  /// Returns a human-friendly sentence describing the error.
+  String get _asSentence {
+    switch (this) {
+      case PlayerErrors.noError:
+        return 'No error';
+      case PlayerErrors.invalidParameter:
+        return 'Some parameters are invalid!';
+      case PlayerErrors.fileNotFound:
+        return 'File not found!';
+      case PlayerErrors.fileLoadFailed:
+        return 'File found, but could not be loaded! Could be a permission '
+            'error or the file is corrupted.';
+      case PlayerErrors.fileAlreadyLoaded:
+        return 'The sound file has already been loaded!';
+      case PlayerErrors.dllNotFound:
+        return 'DLL not found, or wrong DLL!';
+      case PlayerErrors.outOfMemory:
+        return 'Out of memory!';
+      case PlayerErrors.notImplemented:
+        return 'Feature not implemented!';
+      case PlayerErrors.unknownError:
+        return 'Unknown error!';
+      case PlayerErrors.nullPointer:
+        return 'Capture null pointer error. Could happens when passing a non '
+            'initialized pointer (with calloc()) to retrieve FFT or wave data. '
+            'Or, setVisualization has not been enabled.';
+      case PlayerErrors.soundHashNotFound:
+        return 'The sound with specified hash is not found!';
+      case PlayerErrors.backendNotInited:
+        return 'Player not initialized!';
+      case PlayerErrors.filterNotFound:
+        return 'Filter not found!';
+      case PlayerErrors.visualizationNotEnabled:
+        return 'Asking for audio data is not enabled! Please use '
+            '`setVisualizationEnabled(true);` to enable!';
+      case PlayerErrors.maxNumberOfFiltersReached:
+        return 'The maximum number of filters has been reached (default is 8)!';
+      case PlayerErrors.filterAlreadyAdded:
+        return 'Filter not found!';
+      case PlayerErrors.playerAlreadyInited:
+        return 'The player has already been inited!';
+      case PlayerErrors.soundHandleNotFound:
+        return 'The handle is not found! The playing handle could have been '
+            'stopped or ended and it is no more valid!';
+      case PlayerErrors.filterParameterGetError:
+        return 'An error (nan or inf value) occurred while getting a '
+            'filter parameter!';
+      case PlayerErrors.noPlaybackDevicesFound:
+        return 'No playback devices were found while initializing engine or '
+            'when changing the output device.';
+      case PlayerErrors.pcmBufferFull:
+        return 'Trying to add PCM data but the buffer is full or not large '
+            'enough for the needed PCM data. Try increasing the buffer size. '
+            'Or, stream buffer has been set to be ended. ';
+      case PlayerErrors.hashIsNotABufferStream:
+        return "Given hash doesn't belong to a buffer stream.";
+      case PlayerErrors.streamEndedAlready:
+        return 'Trying to add PCM data but the stream is marked to be ended '
+            'already, by the user or when the stream reached its maximum '
+            'capacity, in this case the stream is automatically marked to be '
+            'ended.';
+      case PlayerErrors.failedToCreateOpusDecoder:
+        return 'Failed to create Opus decoder.';
+      case PlayerErrors.failedToDecodeOpusPacket:
+        return 'Failed to decode Opus packet.';
+      case PlayerErrors.bufferStreamCanBePlayedOnlyOnce:
+        return 'BufferStream can be played only once when using '
+            '`BufferingType.release` buffer type!';
+      case PlayerErrors.maxActiveVoiceCountReached:
+        return 'The maximum number of active voices has been reached! Try '
+            'to increase the maximum active voice count with '
+            '`setMaxActiveVoiceCount`. Also, please read `play/play3d` '
+            'documentation for more information about the maximum active '
+            'voice count.';
+      case PlayerErrors.wrongBufferTypeToAskForTimeConsumed:
+        return 'Trying to get time consumed from wrong buffer type. '
+            'This is only available for `BufferingType.preserved` buffers.';
+      case PlayerErrors.bufferStreamWithReleasedBufferTypeCannotBeSeeked:
+        return 'BufferStream with released buffer type cannot be seeked.';
+      case PlayerErrors.audioFormatNotSupported:
+        return 'Audio format not supported. Please check the audio file format '
+            'and ensure it is supported by the player.';
+      case PlayerErrors.xiphLibsNotFound:
+        return 'Xiph libraries not found. Please check the '
+            'installation and ensure the required libraries are available. '
+            'Ref:'
+            'https://docs.page/alnitak/flutter_soloud_docs/get_started/no_xiph_libs';
+      case PlayerErrors.busIdNotFound:
+        return 'Bus id not found!';
+      case PlayerErrors.hashIsNotAPullBufferStream:
+        return "Given hash doesn't belong to a pull buffer stream.";
+      case PlayerErrors.invalidPullBufferState:
+        return 'The pull buffer stream is in an invalid state for this '
+            'operation.';
+      case PlayerErrors.audioDeviceFailedToStart:
+        return 'The output audio device could not be started or resumed!';
+      case PlayerErrors.failedToStartPlayback:
+        return 'Failed to start the playback. The audio engine could not '
+            'create a valid voice for this sound.';
+    }
+  }
+
+  @override
+  String toString() => 'PlayerErrors.$name ($_asSentence)';
+}
+
+/// Possible read samples errors.
+enum ReadSamplesErrors {
+  /// No error
+  readSamplesNoError(0),
+
+  /// Initialization failed. Probably an unsupported format.
+  noBackend(1),
+
+  /// Failed to retrieve decoder data format.
+  failedToGetDataFormat(2),
+
+  /// Failed to seek audio data.
+  failedToSeekPcm(3),
+
+  /// Failed to read PCM frames.
+  failedToReadPcmFrames(4);
+
+  /// The integer value of the error. This is the same number that is returned
+  /// from the C++ API.
+  final int value;
+
+  /// Constructs a valid error with [value].
+  // ignore: sort_constructors_first
+  const ReadSamplesErrors(this.value);
+
+  /// Returns a [ReadSamplesErrors] from a [value].
+  static ReadSamplesErrors fromValue(int value) => switch (value) {
+    0 => readSamplesNoError,
+    1 => noBackend,
+    2 => failedToGetDataFormat,
+    3 => failedToSeekPcm,
+    4 => failedToReadPcmFrames,
+    _ => throw ArgumentError('Unknown value for ReadSamplesErrors: $value'),
+  };
+
+  /// Returns a human-friendly sentence describing the error.
+  String get _asSentence {
+    switch (this) {
+      case ReadSamplesErrors.readSamplesNoError:
+        return 'No error';
+      case ReadSamplesErrors.noBackend:
+        return 'Initialization failed. Probably an unsupported format.';
+      case ReadSamplesErrors.failedToGetDataFormat:
+        return 'Failed to retrieve decoder data format.';
+      case ReadSamplesErrors.failedToSeekPcm:
+        return 'Failed to seek audio data.';
+      case ReadSamplesErrors.failedToReadPcmFrames:
+        return 'Failed to read PCM frames.';
+    }
+  }
+
+  @override
+  String toString() => 'PlayerErrors.$name ($_asSentence)';
+}
+
+/// The types of waveforms.
+enum WaveForm {
+  /// Raw, harsh square wave.
+  square,
+
+  /// Raw, harsh saw wave.
+  saw,
+
+  /// Sine wave.
+  sin,
+
+  /// Triangle wave.
+  triangle,
+
+  /// Bounce, i.e, abs(sin()).
+  bounce,
+
+  /// Quarter sine wave, rest of period quiet.
+  jaws,
+
+  /// Half sine wave, rest of period quiet.
+  humps,
+
+  /// "Fourier" square wave; less noisy.
+  fSquare,
+
+  /// "Fourier" saw wave; less noisy.
+  fSaw,
+}
+
+/// The way an audio file is loaded.
+enum LoadMode {
+  /// Load and decompress the audio file into RAM.
+  /// Less CPU, more memory allocated, low latency.
+  memory,
+
+  /// Keep the file on disk and only load chunks as needed.
+  /// More CPU, less memory allocated, seeking lags with MP3s.
+  disk,
+}
+
+/// Audio state changes. These notifications are sent when the OS reports
+/// audio device state changes. The [interruptionBegan] and [interruptionEnded]
+/// events are handled automatically by the output-device lifecycle
+/// coordinator. Interruption end restarts the device only when active playback
+/// requires it or the idle timeout is disabled. You can listen to these events
+/// if you need to update your UI or perform additional actions.
+///
+/// Note: Notifications should work on iOS but not all Android backends will
+/// report this notification. However the started and stopped events should
+/// be reliable for all backends.
+enum PlayerStateNotification {
+  /// The audio device has started.
+  started,
+
+  /// The audio device has stopped.
+  stopped,
+
+  /// The audio route has changed (e.g., headphones plugged/unplugged).
+  rerouted,
+
+  /// An audio interruption has begun (e.g., incoming call, Siri).
+  /// The plugin safely stops the audio device without mutating voice state.
+  interruptionBegan,
+
+  /// An audio interruption has ended.
+  /// The plugin restarts the device when active playback requires it or
+  /// indefinite keep-alive is configured.
+  interruptionEnded,
+
+  /// The audio session is unlocked and ready for use.
+  unlocked,
+
+  /// An automatic output-device start failed, after the backend had already
+  /// rebuilt the device and retried.
+  ///
+  /// Unlike the OS-sourced notifications above, this one is emitted by the
+  /// plugin's own lifecycle scheduler and is reliable on every backend. It is
+  /// surfaced publicly as `SoLoud.audioDeviceStartFailures`.
+  audioDeviceStartFailed,
+}
+
+/// Why an automatic output-device start failed.
+///
+/// Delivered by `SoLoud.audioDeviceStartFailures`.
+enum AudioDeviceStartFailure {
+  /// The backend could not start the output device, even after rebuilding it
+  /// against the current default output.
+  ///
+  /// Playback state is untouched: voices remain valid and unpaused, so audio
+  /// resumes if the device can later be started (for example by awaiting
+  /// `SoLoud.startAudioDevice`).
+  deviceUnavailable,
+}
+
+/// The state of the audio output device, as reported by
+/// `SoLoud.getAudioDeviceState`.
+///
+/// The values mirror miniaudio's actual `ma_device_state`; they do not describe
+/// lifecycle scheduler intent or a pending operation.
+///
+/// WARNING: Keep these in sync with `src/enums.h`.
+enum AudioDeviceState {
+  /// The device is uninitialized. Also returned before the engine is
+  /// initialized or after it has been deinitialized.
+  uninitialized(0),
+
+  /// The device exists but is currently stopped, for example after the engine
+  /// has remained idle for its configured timeout.
+  stopped(1),
+
+  /// The device is started and is requesting and/or delivering audio data.
+  started(2),
+
+  /// The device is transitioning from a stopped state to a started state.
+  starting(3),
+
+  /// The device is transitioning from a started state to a stopped state.
+  stopping(4);
+
+  const AudioDeviceState(this.value);
+
+  /// Returns the [AudioDeviceState] for the given native integer [value],
+  /// falling back to [uninitialized] for any unknown value.
+  factory AudioDeviceState.fromValue(int value) {
+    return AudioDeviceState.values.firstWhere(
+      (state) => state.value == value,
+      orElse: () => AudioDeviceState.uninitialized,
+    );
+  }
+
+  /// The native integer value of the state.
+  final int value;
+}
+
+/// The channels to be used while initializing the player.
+enum Channels {
+  /// One channel.
+  mono(1),
+
+  /// Two channels.
+  stereo(2),
+
+  /// Four channels.
+  quad(4),
+
+  /// Six channels.
+  surround51(6),
+
+  /// Eight channels.
+  dolby71(8);
+
+  const Channels(this.count);
+
+  /// The channels count.
+  final int count;
+
+  /// Returns a human-friendly channel name.
+  @override
+  String toString() {
+    switch (this) {
+      case Channels.mono:
+        return 'Mono';
+      case Channels.stereo:
+        return 'Stereo';
+      case Channels.quad:
+        return 'Quad';
+      case Channels.surround51:
+        return 'Surround 5.1';
+      case Channels.dolby71:
+        return 'Dolby 7.1';
+    }
+  }
+}
+
+/// The PCM types.
+///
+/// WARNING: Keep these in sync with `src/enums.h`.
+enum BufferType {
+  /// 32-bit floating point, little-endian.
+  f32le(0),
+
+  /// 8-bit signed, little-endian.
+  s8(1),
+
+  /// 16-bit signed, little-endian.
+  s16le(2),
+
+  /// 32-bit signed, little-endian.
+  s32le(3),
+
+  /// Opus encoded audio.
+  /// `opus` is deprecated, use `auto` instead which will automatically
+  /// determine from MP3, OGG Opus or OGG Vorbis.
+  opus(4),
+
+  /// Auto detect the type from  MP3, OGG Opus or OGG Vorbis formats.
+  auto(5);
+
+  /// The integer value of the PCM type.
+  final int value;
+
+  /// Constructs a valid PCM type with [value].
+  // ignore: sort_constructors_first
+  const BufferType(this.value);
+
+  /// Returns a human-friendly channel name.
+  @override
+  String toString() {
+    switch (this) {
+      case BufferType.s8:
+        return 'Signed 8-bit';
+      case BufferType.s16le:
+        return 'Little Endian Signed 16-bit';
+      case BufferType.s32le:
+        return 'Little Endian Signed 32-bit';
+      case BufferType.f32le:
+        return 'Little Endian Float 32-bit';
+      case BufferType.opus:
+        return 'Opus Encoded Audio';
+      case BufferType.auto:
+        return 'MP3, Opus or Vorbis Encoded Audio';
+    }
+  }
+}
+
+/// The output format for mixer capture.
+///
+/// WARNING: Keep these in sync with `src/enums.h`.
+enum MixerOutputFormat {
+  /// 32-bit floating point, little-endian.
+  pcmF32le(0),
+
+  /// 8-bit signed, little-endian.
+  pcmS8(1),
+
+  /// 16-bit signed, little-endian.
+  pcmS16le(2),
+
+  /// 32-bit signed, little-endian.
+  pcmS32le(3),
+
+  /// Opus encoded audio.
+  opus(4),
+
+  /// Vorbis encoded audio.
+  vorbis(5),
+
+  /// FLAC encoded audio.
+  flac(6),
+
+  /// WAV encoded audio (16-bit PCM in a RIFF/WAVE container).
+  wav(7);
+
+  /// The integer value of the format.
+  final int value;
+
+  /// Constructs a valid mixer output format with [value].
+  // ignore: sort_constructors_first
+  const MixerOutputFormat(this.value);
+
+  /// Whether this is a PCM (uncompressed) format.
+  bool get isPcm =>
+      this == MixerOutputFormat.pcmF32le ||
+      this == MixerOutputFormat.pcmS8 ||
+      this == MixerOutputFormat.pcmS16le ||
+      this == MixerOutputFormat.pcmS32le;
+
+  /// The number of bytes per sample for this format, or 0 for compressed
+  /// formats.
+  int get bytesPerSample {
+    switch (this) {
+      case MixerOutputFormat.pcmF32le:
+        return 4;
+      case MixerOutputFormat.pcmS8:
+        return 1;
+      case MixerOutputFormat.pcmS16le:
+        return 2;
+      case MixerOutputFormat.pcmS32le:
+        return 4;
+      case MixerOutputFormat.opus:
+      case MixerOutputFormat.vorbis:
+      case MixerOutputFormat.flac:
+      case MixerOutputFormat.wav:
+        return 0;
+    }
+  }
+
+  /// The number of bytes per frame for a given channel count.
+  ///
+  /// Returns 0 for compressed formats.
+  int bytesPerFrame(int channels) => bytesPerSample * channels;
+
+  /// Returns a human-friendly format name.
+  @override
+  String toString() {
+    switch (this) {
+      case MixerOutputFormat.pcmF32le:
+        return 'PCM F32LE';
+      case MixerOutputFormat.pcmS8:
+        return 'PCM S8';
+      case MixerOutputFormat.pcmS16le:
+        return 'PCM S16LE';
+      case MixerOutputFormat.pcmS32le:
+        return 'PCM S32LE';
+      case MixerOutputFormat.opus:
+        return 'Opus';
+      case MixerOutputFormat.vorbis:
+        return 'Vorbis';
+      case MixerOutputFormat.flac:
+        return 'FLAC';
+      case MixerOutputFormat.wav:
+        return 'WAV';
+    }
+  }
+}
+
+/// How the buffering should work when using the BufferStream.
+enum BufferingType {
+  /// Preserve the data already in the buffer while playing it.
+  preserved,
+
+  /// Release the data in the buffer while playing it.
+  released,
+}
+
+/// The kind of visualization data to acquire.
+///
+/// WARNING: Keep these in sync with `src/enums.h`.
+enum VisualizationKind {
+  /// Time-domain wave data only.
+  wave(0),
+
+  /// Frequency-domain FFT data only.
+  fft(1),
+
+  /// Both wave and FFT data.
+  waveAndFft(2);
+
+  const VisualizationKind(this.value);
+
+  /// The integer value representing the enum in native code.
+  final int value;
+}
+
+/// Channel selection constants for audio visualization.
+abstract final class VisualizationChannel {
+  /// Mix down all active playback channels to a single mono stream using
+  /// miniaudio's spatial channel downmixer.
+  static const int merged = -1;
+
+  /// Process and emit separate visualization data for each active channel
+  /// (e.g. Left and Right for stereo).
+  static const int all = -2;
+}
+
+/// Linux audio backends.
+///
+/// WARNING: Keep these in sync with `src/enums.h`.
+enum LinuxAudioBackend {
+  /// Let miniaudio choose the default backend (ALSA first, then PulseAudio,
+  /// then JACK).
+  auto(0),
+
+  /// Advanced Linux Sound Architecture (ALSA).
+  alsa(1),
+
+  /// PulseAudio sound server.
+  pulseAudio(2),
+
+  /// JACK Audio Connection Kit.
+  jack(3);
+
+  const LinuxAudioBackend(this.value);
+
+  /// The integer value representing the enum in native code.
+  final int value;
+
+  /// Returns the [LinuxAudioBackend] corresponding to [value].
+  static LinuxAudioBackend fromValue(int value) => switch (value) {
+    0 => auto,
+    1 => alsa,
+    2 => pulseAudio,
+    3 => jack,
+    _ => auto,
+  };
+}

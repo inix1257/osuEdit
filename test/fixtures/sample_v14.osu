@@ -1,0 +1,74 @@
+osu file format v14
+
+[General]
+AudioFilename: audio.mp3
+AudioLeadIn: 0
+PreviewTime: 12000
+Countdown: 0
+SampleSet: Soft
+StackLeniency: 0.7
+Mode: 0
+LetterboxInBreaks: 0
+WidescreenStoryboard: 1
+
+[Editor]
+Bookmarks: 1000,6333
+DistanceSpacing: 1.2
+BeatDivisor: 4
+GridSize: 32
+TimelineZoom: 1.5
+
+[Metadata]
+Title:Sample Map
+TitleUnicode:샘플 맵
+Artist:osuEdit
+ArtistUnicode:osuEdit
+Creator:osuEdit
+Version:Normal
+Source:
+Tags:sample test fixture
+BeatmapID:0
+BeatmapSetID:-1
+
+[Difficulty]
+HPDrainRate:5
+CircleSize:4
+OverallDifficulty:7
+ApproachRate:8
+SliderMultiplier:1.4
+SliderTickRate:1
+
+[Events]
+//Background and Video events
+0,0,"bg.jpg",0,0
+//Break Periods
+//Storyboard Layer 0 (Background)
+//Storyboard Layer 1 (Fail)
+//Storyboard Layer 2 (Pass)
+//Storyboard Layer 3 (Foreground)
+//Storyboard Sound Samples
+
+[TimingPoints]
+1000,333.333333333333,4,2,0,60,1,0
+3666,-100,4,2,0,60,0,0
+5000,-66.6666666666667,4,2,0,70,0,1
+9000,500,3,1,1,50,1,0
+
+
+[Colours]
+Combo1 : 255,128,64
+Combo2 : 64,160,255
+Combo3 : 128,255,128
+
+[HitObjects]
+100,100,1000,5,0,0:0:0:0:
+200,100,1333,1,2,0:0:0:0:
+300,150,1666,2,0,B|350:200|300:250,1,140,2|0,0:0|0:0,0:0:0:0:
+256,192,2333,6,0,P|300:120|360:192,2,140
+400,300,3666,2,8,L|250:300,1,140,0|0,1:2|0:0,0:0:0:0:
+100,300,4333,1,0,0:0:0:0:
+120,200,5000,6,0,B|160:140|160:140|240:140|260:80,1,210,4|0,0:0|0:0,0:0:0:0:
+256,192,6333,12,0,8000,0:0:0:0:
+64,64,9000,5,0,0:0:0:0:
+448,64,9500,1,0,1:2:0:80:
+256,320,10000,2,0,C|300:300|350:330|400:300,1,140,0|0,0:0|0:0,0:0:0:0:

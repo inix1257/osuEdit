@@ -1,0 +1,68 @@
+osu file format v14
+
+[General]
+AudioFilename: audio.mp3
+AudioLeadIn: 0
+PreviewTime: 1000
+Countdown: 0
+SampleSet: Soft
+StackLeniency: 0.7
+Mode: 0
+LetterboxInBreaks: 0
+WidescreenStoryboard: 1
+
+[Editor]
+Bookmarks: 1000,6333,9000,11667
+DistanceSpacing: 1
+BeatDivisor: 4
+GridSize: 32
+TimelineZoom: 1
+
+[Metadata]
+Title:Sync Test
+TitleUnicode:Sync Test
+Artist:osuEdit
+ArtistUnicode:osuEdit
+Creator:osuEdit
+Version:Shapes
+Source:
+Tags:test slider shapes
+BeatmapID:0
+BeatmapSetID:-1
+
+[Difficulty]
+HPDrainRate:5
+CircleSize:4
+OverallDifficulty:8
+ApproachRate:9
+SliderMultiplier:1.4
+SliderTickRate:1
+
+[Events]
+//Background and Video events
+0,0,"bg.jpg",0,0
+//Break Periods
+//Storyboard Layer 0 (Background)
+//Storyboard Layer 1 (Fail)
+//Storyboard Layer 2 (Pass)
+//Storyboard Layer 3 (Foreground)
+//Storyboard Sound Samples
+
+[TimingPoints]
+1000,333.3333333333333,4,2,0,60,1,0
+6333,-200,4,2,0,60,0,0
+7667,-50,4,2,0,60,0,0
+8333,-100,4,2,0,60,0,0
+
+
+[HitObjects]
+64,96,1000,6,0,L|224:96,1,140,0|0,0:0|0:0,0:0:0:0:
+256,64,1667,2,0,P|352:128|256:192,1,140,0|0,0:0|0:0,0:0:0:0:
+64,192,2333,2,0,B|128:128|192:256|192:256|256:192|320:256,1,210,0|0,0:0|0:0,0:0:0:0:
+384,192,3000,2,0,C|448:224|416:288|480:320,1,140,0|0,0:0|0:0,0:0:0:0:
+96,320,3667,2,0,B|160:256|224:352|288:288,1,140,0|0,0:0|0:0,0:0:0:0:
+320,320,4333,2,0,L|448:320,3,70,0|0|0|0,0:0|0:0|0:0|0:0,0:0:0:0:
+128,64,5000,2,0,B|256:32|384:96|384:96|448:160,1,210,0|0,0:0|0:0,0:0:0:0:
+96,192,6333,6,0,L|416:192,1,140,0|0,0:0|0:0,0:0:0:0:
+96,288,7667,2,0,L|416:288,1,280,0|0,0:0|0:0,0:0:0:0:
+256,192,9000,12,0,11000,0:0:0:0:

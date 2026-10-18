@@ -1,0 +1,46 @@
+name: osu_edit
+description: "osu! beatmap editor for Android / iOS (Windows for development)."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  archive: 4.3.0
+  file_picker: ^13.1.0
+  flutter:
+    sdk: flutter
+  # 5.1.6 with a resampler fix (see packages/flutter_soloud/OSUEDIT_PATCH.md).
+  flutter_soloud:
+    path: packages/flutter_soloud
+  path_provider: 2.1.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/samples/
+  fonts:
+    - family: Exo 2
+      fonts:
+        - asset: assets/fonts/Exo2.ttf
+        - asset: assets/fonts/Exo2.ttf
+          weight: 500
+        - asset: assets/fonts/Exo2.ttf
+          weight: 600
+        - asset: assets/fonts/Exo2.ttf
+          weight: 700
+    - family: JetBrains Mono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf
+        - asset: assets/fonts/JetBrainsMono-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/JetBrainsMono-Bold.ttf
+          weight: 700

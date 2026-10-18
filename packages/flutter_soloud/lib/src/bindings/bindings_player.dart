@@ -1,0 +1,1625 @@
+// ignore_for_file: avoid_positional_boolean_parameters
+
+import 'dart:async';
+import 'dart:typed_data';
+
+import 'package:flutter_soloud/src/audio_visualization_data.dart';
+import 'package:flutter_soloud/src/enums.dart';
+import 'package:flutter_soloud/src/filters/filters.dart';
+import 'package:flutter_soloud/src/helpers/playback_device.dart';
+import 'package:flutter_soloud/src/sound_handle.dart';
+import 'package:flutter_soloud/src/sound_hash.dart';
+import 'package:meta/meta.dart';
+
+/// Callback set in `setBufferStream` for the `onBuffering` closure.
+typedef OnBufferingCallbackTFunction =
+    void Function(bool isBuffering, int handle, double time);
+
+/// Callback set in `setBufferStream` for the `onMetadata` closure.
+typedef OnMetadataCallbackTFunction = void Function(dynamic metadata);
+
+/// Callback set in `setPullBufferStream` for the `onAudioDuration` closure.
+typedef OnAudioDurationCallbackTFunction = void Function(double duration);
+
+/// Callback set in `setPullBufferStream` for the `onMoreDataIsNeeded` closure.
+/// [offset] is the byte position in the original encoded stream.
+typedef OnMoreDataIsNeededCallbackTFunction = void Function(int offset);
+
+/// Abstract class defining the interface for the platform-specific
+/// implementations.
+abstract class FlutterSoLoud {
+  /// Controller to listen to voice ended events.
+  late final StreamController<int> voiceEndedEventController =
+      StreamController.broadcast();
+
+  /// Listener for voices ended.
+  Stream<int> get voiceEndedEvents => voiceEndedEventController.stream;
+
+  /// Controller to listen to file loaded events.
+  /// Not used on the web.
+  late final StreamController<Map<String, dynamic>> fileLoadedEventsController =
+      StreamController.broadcast();
+
+  /// Listener for file loaded.
+  /// Not used on the web.
+  Stream<Map<String, dynamic>> get fileLoadedEvents =>
+      fileLoadedEventsController.stream;
+
+  /// Controller to listen to voice ended events.
+  /// Not used on the web.
+  @experimental
+  late final StreamController<PlayerStateNotification> stateChangedController =
+      StreamController.broadcast();
+
+  /// listener for voices ended.
+  /// Not used on the web.
+  @experimental
+  Stream<PlayerStateNotification> get stateChangedEvents =>
+      stateChangedController.stream;
+
+  /// Used with FFI only to close NativeCallable callbacks after native code
+  /// has unregistered them during teardown.
+  @mustBeOverridden
+  void disposeNativeCallables();
+
+  /// Used with FFI only to make native forget every Dart callback pointer.
+  @mustBeOverridden
+  void clearDartCallbackRegistrations();
+
+  /// Set Dart functions to call when an event occurs.
+  ///
+  /// On the web, only the `voiceEndedCallback` is supported. On the other
+  /// platform there are also `fileLoadedCallback` and `stateChangedCallback`.
+  @mustBeOverridden
+  Future<void> setDartEventCallbacks();
+
+  /// Check if the libopus and libogg are available at build time.
+  @mustBeOverridden
+  bool areXiphLibsAvailable();
+
+  /// Controller that fires copied mixer output chunks.
+  ///
+  /// Platform implementations copy data out of the native circular buffer
+  /// and advance the read position before emitting here. This provides a
+  /// single, safe stream for `SoLoud.startMixerOutputStream`.
+  late final StreamController<Uint8List> mixerOutputChunkController =
+      StreamController.broadcast();
+
+  /// Stream of copied mixer output chunks.
+  Stream<Uint8List> get mixerOutputChunkEvents =>
+      mixerOutputChunkController.stream;
+
+  /// Register the mixer output callback so that this isolate's
+  /// [mixerOutputChunkEvents] stream receives copied chunks.
+  ///
+  /// This is intended for non-main isolates that want to start capture after
+  /// the engine has been initialized in the main isolate. It does not touch the
+  /// voice-ended, file-loaded, or state-changed callbacks, which must remain
+  /// owned by the main isolate. Implementations must be idempotent.
+  @mustBeOverridden
+  void registerMixerOutputCallback();
+
+  /// Start capturing the master mixer output.
+  ///
+  /// [format] the desired output format.
+  /// [sampleRate] the sample rate. Use -1 to follow the engine rate.
+  /// [channels] the channel count. Use -1 to follow the engine channels.
+  /// [bufferSizeBytes] total size of the circular capture buffer.
+  /// [notificationThresholdBytes] bytes that must be available before
+  /// [mixerOutputChunkEvents] fires. Used for compressed formats.
+  /// [chunkPCMFrames] fixed number of PCM frames per emitted chunk.
+  /// Used for PCM formats; -1 to disable.
+  ///
+  /// Returns [PlayerErrors.noError] if success.
+  @mustBeOverridden
+  PlayerErrors startMixerOutputCapture(
+    MixerOutputFormat format,
+    int sampleRate,
+    int channels,
+    int bufferSizeBytes,
+    int notificationThresholdBytes,
+    int chunkPCMFrames,
+  );
+
+  /// Stop capturing the master mixer output.
+  @mustBeOverridden
+  void stopMixerOutputCapture();
+
+  /// Whether mixer output capture is currently active.
+  @mustBeOverridden
+  bool isMixerOutputCaptureRunning();
+
+  /// Total size of the native capture buffer in bytes.
+  @mustBeOverridden
+  int getMixerOutputBufferSize();
+
+  /// Number of unread bytes currently available in the capture buffer.
+  @mustBeOverridden
+  int getMixerOutputAvailableBytes();
+
+  /// Current read offset in the capture buffer.
+  @mustBeOverridden
+  int getMixerOutputReadOffset();
+
+  /// Advance the read position by [bytes].
+  @mustBeOverridden
+  void advanceMixerOutputReadPosition(int bytes);
+
+  /// Copy [length] bytes from the native capture buffer starting at [offset].
+  @mustBeOverridden
+  Uint8List copyMixerOutputBuffer(int offset, int length);
+
+  /// Returns the current 44-byte WAV header for the active capture session.
+  ///
+  /// This is only meaningful when the capture format is
+  /// [MixerOutputFormat.wav].
+  /// The header's size fields reflect the PCM data emitted so far; callers
+  /// should overwrite the first 44 bytes of the saved file with the returned
+  /// header after stopping capture to ensure the WAV file is valid.
+  @mustBeOverridden
+  Uint8List getMixerOutputWavHeader();
+
+  /// Initialize the player. Must be called before any other player functions.
+  ///
+  /// [deviceId] the device ID. -1 for default OS output device.
+  /// [sampleRate] the sample rate. Usually is 22050, 44100 (CD quality)
+  /// or 48000.
+  /// [bufferSize] the audio buffer size. Usually is 2048, but can be also be
+  /// lowered if less latency is needed.
+  /// [channels] mono, stereo, quad, 5.1, 7.1.
+  /// [devicePeriodFrames] small output device period used when
+  /// [renderAheadFrames] enables the render-ahead ring; 0 = default (512).
+  /// Ignored on web.
+  /// [renderAheadFrames] depth of the engine-owned render-ahead ring in
+  /// frames; 0 (the default) disables it and keeps direct-to-device mixing.
+  /// Ignored on web.
+  ///
+  /// Returns [PlayerErrors.noError] if success.
+  ///
+  /// On web with the multi-threaded (AudioWorklet) WASM build this completes
+  /// asynchronously: starting the worklet thread suspends the WASM call with
+  /// ASYNCIFY, so the web implementation returns a [Future]. Native
+  /// implementations return the result synchronously.
+  ///
+  /// The blocking native engine/device initialization runs off the UI thread so
+  /// it does not freeze the app (#481); the future completes once the engine is
+  /// initialized.
+  @mustBeOverridden
+  FutureOr<PlayerErrors> initEngine(
+    int deviceId,
+    int sampleRate,
+    int bufferSize,
+    Channels channels,
+    bool lowLatency, {
+    int devicePeriodFrames = 0,
+    int renderAheadFrames = 0,
+  });
+
+  /// Android only: when [managed] is true (default) SoLoud tags the AAudio
+  /// stream as media/music; when false it leaves usage/contentType unset so the
+  /// app can manage AudioAttributes externally (e.g. via audio_session). Only
+  /// affects the native backends with low-latency disabled; call before
+  /// [initEngine]. No effect on web.
+  @mustBeOverridden
+  void setAndroidAAudioAttributes(bool managed);
+
+  /// Linux only: choose the audio backend ([LinuxAudioBackend.auto],
+  /// [LinuxAudioBackend.alsa], [LinuxAudioBackend.pulseAudio], or
+  /// [LinuxAudioBackend.jack]).
+  /// When called before [initEngine], sets the backend for initialization.
+  /// When called while the engine is running, dynamically switches the output
+  /// device. No effect on other platforms.
+  @mustBeOverridden
+  FutureOr<PlayerErrors> setLinuxAudioBackend(LinuxAudioBackend backend);
+
+  /// Set how long the audio output device keeps running while the engine is
+  /// idle (no active voices) before it is automatically stopped, on every
+  /// platform. A `null` [timeout] keeps the device running indefinitely while
+  /// idle (the deferred idle-pause is suppressed, so the device keeps rendering
+  /// silence and the app keeps its OS audio session alive) and starts it
+  /// immediately if it was stopped. [Duration.zero] stops the device as soon as
+  /// possible once idle. A positive [timeout] keeps it running for that long
+  /// after going idle. Any play/unpause before the deadline cancels the pending
+  /// stop. Defaults to 500 ms. Can be called any time. No effect on web (the
+  /// device is always kept running there).
+  @mustBeOverridden
+  void setAudioDeviceIdleTimeout(Duration? timeout);
+
+  /// Stop the audio output device without deinitializing the engine. By default
+  /// this is a successful no-op while voices are active. Set [force] to stop
+  /// the device during active playback without pausing or mutating voices.
+  ///
+  /// The blocking native device call runs off the UI thread so it does not
+  /// freeze the app; the returned future completes once the conditional check
+  /// and any resulting device stop have finished.
+  @mustBeOverridden
+  Future<PlayerErrors> stopAudioDevice({bool force = false});
+
+  /// Restart the audio output device previously stopped by [stopAudioDevice],
+  /// so existing voices and loaded sounds keep operating. Idempotent: a no-op
+  /// if the device is already started.
+  ///
+  /// The blocking native device call runs off the UI thread so it does not
+  /// freeze the app; the returned future completes once the device is running.
+  @mustBeOverridden
+  Future<PlayerErrors> startAudioDevice();
+
+  /// Get the current state of the audio output device. Returns
+  /// [AudioDeviceState.uninitialized] if the engine is not initialized.
+  @mustBeOverridden
+  AudioDeviceState getAudioDeviceState();
+
+  /// Change the playback device.
+  ///
+  /// [deviceId] the device ID. -1 for default OS output device.
+  ///
+  /// On web with the multi-threaded (AudioWorklet) WASM build this completes
+  /// asynchronously (see [initEngine]); native implementations return the
+  /// result synchronously.
+  @mustBeOverridden
+  FutureOr<PlayerErrors> changeDevice(int deviceId);
+
+  /// List available playback devices.
+  List<PlaybackDevice> listPlaybackDevices();
+
+  /// Must be called when the player is no more needed or when closing the app.
+  @mustBeOverridden
+  void deinit();
+
+  /// Dispose the native engine without blocking the calling isolate.
+  @mustBeOverridden
+  Future<void> deinitAsync();
+
+  /// Prepare native init state before dispatching an asynchronous init.
+  ///
+  /// On platforms with a FlutterEngine lifecycle this also claims the
+  /// process-global native engine for the FlutterEngine that owns this isolate.
+  /// The claim is taken here, before the initialization is dispatched, rather
+  /// than when callbacks register: opening the audio device can take seconds,
+  /// and an engine destroyed during that window still has to be able to tear
+  /// down what it just built.
+  ///
+  /// Synchronous everywhere except iOS: see [usesAsyncEnginePrepare].
+  @mustBeOverridden
+  void prepareEngineInit();
+
+  /// Whether this platform must claim the engine through
+  /// [prepareEngineInitAsync] instead of [prepareEngineInit].
+  ///
+  /// True only on iOS, where the plugin that observes FlutterEngine destruction
+  /// has to be the one that takes the claim — it cannot discover the engine id
+  /// by itself — which means a round trip to the platform thread. Everywhere
+  /// else the claim is taken synchronously, with no suspension point between
+  /// deciding to initialize and owning the engine.
+  @mustBeOverridden
+  bool get usesAsyncEnginePrepare;
+
+  /// Claim the engine by way of the platform, for [usesAsyncEnginePrepare].
+  ///
+  /// Throws `SoLoudInitializationStoppedByDeinitException` when the claim was
+  /// refused — most often because a `deinit()` ran while this was in flight and
+  /// superseded it. Falls back to the synchronous claim, without throwing, when
+  /// the platform channel was definitively unusable.
+  @mustBeOverridden
+  Future<void> prepareEngineInitAsync();
+
+  /// Publish a native shutdown request before dispatching asynchronous dispose.
+  @mustBeOverridden
+  void requestEngineShutdown();
+
+  /// Gets the state of player
+  ///
+  /// Return true if initilized
+  @mustBeOverridden
+  bool isInited();
+
+  /// Load a new sound to be played once or multiple times later.
+  /// This is not supported on the web, use [loadMem] instead.
+  ///
+  /// After loading the file, the "_fileLoadedCallback" will call the
+  /// Dart function defined with "_setDartEventCallback" which gives back
+  /// the error and the new hash.
+  ///
+  /// [completeFileName] the complete file path.
+  /// [LoadMode] if `LoadMode.memory`, Soloud::wav will be used which loads
+  /// all audio data into memory. Used to prevent gaps or lags
+  /// when seeking/starting a sound (less CPU, more memory allocated).
+  /// If `LoadMode.disk` is used, the audio data is loaded
+  /// from the given file when needed (more CPU, less memory allocated).
+  /// See the [seek] note problem when using [LoadMode] = `LoadMode.disk`.
+  /// `soundHash` return hash of the sound.
+  @mustBeOverridden
+  void loadFile(String completeFileName, LoadMode mode, int counter);
+
+  /// Load a new sound stored into [buffer] as file bytes to be played once
+  /// or multiple times later.
+  /// This is used on the web instead of [loadFile] because the browsers are
+  /// not allowed to read files directly, but it works also on the other
+  /// platforms.
+  ///
+  /// [uniqueName] the unique name of the sound. Used only to have the [hash].
+  /// [buffer] the audio data. These contains the audio file bytes.
+  @mustBeOverridden
+  ({PlayerErrors error, SoundHash soundHash}) loadMem(
+    String uniqueName,
+    Uint8List buffer,
+    LoadMode mode,
+  );
+
+  /// Load two audio files stored into [bufferLeft] and [bufferRight] as
+  /// file bytes, convert them to mono if needed, resample to the engine's
+  /// sample rate, and join them into a single stereo sound (left and right
+  /// channels).
+  ///
+  /// [uniqueName] the unique name of the sound. Used only to have the [hash].
+  /// [bufferLeft] the audio data for the left channel.
+  /// [bufferRight] the audio data for the right channel.
+  @mustBeOverridden
+  ({PlayerErrors error, SoundHash soundHash}) joinTwoSources(
+    String uniqueName,
+    Uint8List bufferLeft,
+    Uint8List bufferRight,
+  );
+
+  /// Set up an audio stream.
+  ///
+  /// [maxBufferSize] the max buffer size in bytes.
+  /// [bufferingType] enum to choose how the buffering will work while playing
+  /// [bufferingTimeNeeds] the buffering time needed in seconds. If a handle
+  /// reaches the current buffer length, it will start to buffer pausing it and
+  /// waiting until the buffer will have enough data to cover this time.
+  /// [sampleRate], [channels], [format] must be set in the case the
+  /// audio data is PCM format.
+  /// [format]: 0 = f32le, 1 = s8, 2 = s16le, 3 = s32le, 4 = Opus
+  @mustBeOverridden
+  ({PlayerErrors error, SoundHash soundHash}) setBufferStream(
+    int maxBufferSize,
+    BufferingType bufferingType,
+    double bufferingTimeNeeds,
+    int sampleRate,
+    int channels,
+    int format,
+    OnBufferingCallbackTFunction? onBuffering,
+    OnMetadataCallbackTFunction? onMetadata,
+  );
+
+  /// Reset the buffer of the audio stream.
+  /// [hash] the hash of the stream sound.
+  /// Returns [PlayerErrors.noError] if success.
+  @mustBeOverridden
+  PlayerErrors resetBufferStream(SoundHash soundHash);
+
+  /// Get the current stream time consumed in seconds of this sound of
+  /// type `BufferingType.RELEASED` with hash [hash].
+  @mustBeOverridden
+  ({PlayerErrors error, double value}) getStreamTimeConsumed(
+    SoundHash soundHash,
+  );
+
+  /// Set the icy metadata integer value. Must be set once before calling
+  /// the first time [addAudioDataStream] to be able to get MP3 and Flac
+  /// metadata of a stream.
+  ///
+  /// [soundHash] the hash of the stream sound.
+  /// [icyMetaInt] the icy metadata integer value. Default is 16000 which
+  /// is the most used value.
+  @mustBeOverridden
+  PlayerErrors setBufferIcyMetaInt(SoundHash soundHash, int icyMetaInt);
+
+  /// Add a chunk of audio data to the buffer stream.
+  ///
+  /// [hash] the hash of the sound.
+  /// [audioChunk] the audio data to add.
+  @mustBeOverridden
+  PlayerErrors addAudioDataStream(int hash, Uint8List audioChunk);
+
+  /// Set the end of the data stream.
+  /// [hash] the hash of the stream sound.
+  /// Returns [PlayerErrors.noError] if success.
+  @mustBeOverridden
+  PlayerErrors setDataIsEnded(SoundHash soundHash);
+
+  /// Get the current buffer size in bytes of this sound with hash [hash].
+  /// [hash] the hash of the stream sound.
+  @mustBeOverridden
+  ({PlayerErrors error, int sizeInBytes}) getBufferSize(SoundHash soundHash);
+
+  /// Set up a pull-based audio stream.
+  ///
+  /// [bufferSizeBytes] the decoded circular buffer size in bytes.
+  /// [bufferTriggerPosition] normalized fraction in `[0.0, 1.0]` that controls
+  /// when [onMoreDataIsNeeded] is fired.
+  /// [sampleRate] the sample rate of the decoded audio.
+  /// [channels] the number of channels.
+  /// [format] the audio format (PCM variants or AUTO).
+  /// [audioSizeBytes] total encoded or PCM file size in bytes.
+  @mustBeOverridden
+  ({PlayerErrors error, SoundHash soundHash}) setPullBufferStream(
+    int bufferSizeBytes,
+    double bufferTriggerPosition,
+    int sampleRate,
+    int channels,
+    int format,
+    int audioSizeBytes,
+    OnBufferingCallbackTFunction? onBuffering,
+    OnMetadataCallbackTFunction? onMetadata,
+    OnMoreDataIsNeededCallbackTFunction? onMoreDataIsNeeded,
+    OnAudioDurationCallbackTFunction? onAudioDuration,
+  );
+
+  /// Reset the pull buffer stream.
+  /// [soundHash] the hash of the stream sound.
+  @mustBeOverridden
+  PlayerErrors resetPullBufferStream(SoundHash soundHash);
+
+  /// Add a chunk of audio data to the pull buffer stream.
+  ///
+  /// [hash] the hash of the sound.
+  /// [audioChunk] the audio data to add.
+  /// [offset] the byte offset of this chunk in the original stream, or 0 for
+  /// the next sequential chunk.
+  ///
+  /// Returns [PlayerErrors.noError] if success.
+  @mustBeOverridden
+  PlayerErrors addPullBufferDataStream(
+    int hash,
+    Uint8List audioChunk, {
+    int offset = 0,
+  });
+
+  /// Get the decoded time range of the pull buffer stream.
+  ///
+  /// [hash] the hash of the sound.
+  /// Returns a record with the player error and the decoded buffer start/end
+  /// positions in seconds.
+  @mustBeOverridden
+  ({PlayerErrors error, double startTime, double endTime})
+  getPullBufferTimeRange(int hash);
+
+  /// Load a new waveform to be played once or multiple times later.
+  ///
+  /// [waveform]
+  /// [superWave]
+  /// [scale]
+  /// [detune]
+  /// `soundHash` return hash of the sound.
+  /// Returns [PlayerErrors.noError] if success.
+  @mustBeOverridden
+  ({PlayerErrors error, SoundHash soundHash}) loadWaveform(
+    WaveForm waveform,
+    bool superWave,
+    double scale,
+    double detune,
+  );
+
+  /// Set the scale of an already loaded waveform identified by [hash].
+  ///
+  /// [hash] the unique sound hash of a waveform sound.
+  /// [newScale] the new scale of the wave.
+  @mustBeOverridden
+  void setWaveformScale(SoundHash hash, double newScale);
+
+  /// Set the detune of an already loaded waveform identified by [hash].
+  ///
+  /// [hash] the unique sound hash of a waveform sound.
+  /// [newDetune] the new detune of the wave.
+  @mustBeOverridden
+  void setWaveformDetune(SoundHash hash, double newDetune);
+
+  /// Set a new frequency of an already loaded waveform identified by [hash].
+  ///
+  /// [hash] the unique sound hash of a waveform sound.
+  /// [newFreq] the new frequence of the wave.
+  @mustBeOverridden
+  void setWaveformFreq(SoundHash hash, double newFreq);
+
+  /// Set a new frequence of an already loaded waveform identified by [hash].
+  ///
+  /// [hash] the unique sound hash of a waveform sound.
+  /// [superwave] 1 if using the super wave.
+  @mustBeOverridden
+  void setWaveformSuperWave(SoundHash hash, int superwave);
+
+  /// Set a new wave form of an already loaded waveform identified by [hash].
+  ///
+  /// [hash] the unique sound hash of a waveform sound.
+  /// [newWaveform] the new kind of [WaveForm] to be used.
+  @mustBeOverridden
+  void setWaveform(SoundHash hash, WaveForm newWaveform);
+
+  /// Speech the text given.
+  ///
+  /// [textToSpeech] the text to be spoken.
+  /// Returns [PlayerErrors.noError] if success and handle sound identifier.
+  @mustBeOverridden
+  ({PlayerErrors error, SoundHandle handle}) speechText(String textToSpeech);
+
+  /// Switch pause state of an already loaded sound identified by [handle].
+  ///
+  /// [handle] the sound handle.
+  /// Returns [PlayerErrors.noError] if success,
+  /// [PlayerErrors.backendNotInited] if the engine is not initialized,
+  /// [PlayerErrors.soundHandleNotFound] if [handle] is not valid.
+  /// Unpausing posts an asynchronous device start, so this never reports
+  /// [PlayerErrors.audioDeviceFailedToStart].
+  @mustBeOverridden
+  PlayerErrors pauseSwitch(SoundHandle handle);
+
+  /// Pause or unpause already loaded sound identified by [handle].
+  ///
+  /// [handle] the sound handle.
+  /// [pause] the new state.
+  /// Returns [PlayerErrors.noError] if success,
+  /// [PlayerErrors.backendNotInited] if the engine is not initialized,
+  /// [PlayerErrors.soundHandleNotFound] if [handle] is not valid.
+  /// Unpausing posts an asynchronous device start, so this never reports
+  /// [PlayerErrors.audioDeviceFailedToStart].
+  @mustBeOverridden
+  PlayerErrors setPause(SoundHandle handle, int pause);
+
+  /// Gets the pause state.
+  ///
+  /// [handle] the sound handle.
+  /// Return true if paused.
+  @mustBeOverridden
+  bool getPause(SoundHandle handle);
+
+  /// Set a sound's relative play speed.
+  /// Setting the value to 0 will cause undefined behavior, likely a crash.
+  /// Change the relative play speed of a sample. This changes the effective
+  /// sample rate while leaving the base sample rate alone.
+  ///
+  /// Note that playing a sound at a higher sample rate will require SoLoud
+  /// to request more samples from the sound source, which will require more
+  /// memory and more processing power. Playing at a slower sample
+  /// rate is cheaper.
+  ///
+  /// [handle] the sound handle.
+  /// [speed] the new speed.
+  @mustBeOverridden
+  void setRelativePlaySpeed(SoundHandle handle, double speed);
+
+  /// Return the current play speed.
+  ///
+  /// [handle] the sound handle.
+  @mustBeOverridden
+  double getRelativePlaySpeed(SoundHandle handle);
+
+  /// Gets the approximate volume for output per output
+  /// channel (i.e, per speaker).
+  ///
+  /// [channel] the channel.
+  /// Return zero for invalid parameters.
+  @mustBeOverridden
+  double getApproximateVolume(int channel);
+
+  /// Play already loaded sound identified by [soundHash].
+  ///
+  /// [soundHash] the unique sound hash of a sound.
+  /// [volume] 1.0 full volume.
+  /// [pan] 0.0 centered.
+  /// [paused] false not paused.
+  /// [looping] whether to start the sound in looping state.
+  /// [loopingStartAt] If looping is enabled, the loop point is, by default,
+  /// the start of the stream. The loop start point can be set with this
+  /// parameter. [loopingEndAt] optionally sets the exclusive end of the loop;
+  /// when it is `null`, the stream's natural end is used.
+  /// Return the error if any and a new `newHandle` of this sound.
+  @mustBeOverridden
+  ({PlayerErrors error, SoundHandle newHandle}) play(
+    SoundHash soundHash, {
+    int busId = 0,
+    double volume = 1,
+    double pan = 0,
+    bool paused = false,
+    bool looping = false,
+    Duration loopingStartAt = Duration.zero,
+    Duration? loopingEndAt,
+    double scale = 1,
+  });
+
+  /// Variant of [play] that takes an additional parameter, the time offset
+  /// for the sound.
+  ///
+  /// While the vanilla [play] tries to play sounds as soon as possible,
+  /// [playClocked] will delay the start of sounds so that rapidly launched
+  /// sounds don't all get clumped to the start of the next outgoing sound
+  /// buffer.
+  ///
+  /// [soundHash] the unique sound hash of a sound.
+  /// [soundTime] your app's "physics time". The engine will use that time
+  /// (as well as the time previously used) to calculate the delay between
+  /// two sound effects.
+  /// [busId] the bus ID to play the sound on. 0 means the main engine.
+  /// [volume] 1.0 full volume.
+  /// [pan] 0.0 centered.
+  /// [scale] relative playback speed multiplier (1.0 = normal speed).
+  /// [looping] whether the sound should loop when reaching the end.
+  /// [loopingStartAt] time to seek to when looping.
+  /// Return the error if any and a new `newHandle` of this sound.
+  @mustBeOverridden
+  ({PlayerErrors error, SoundHandle newHandle}) playClocked(
+    SoundHash soundHash,
+    Duration soundTime, {
+    int busId = 0,
+    double volume = 1,
+    double pan = 0,
+    double scale = 1,
+    bool looping = false,
+    Duration loopingStartAt = Duration.zero,
+    Duration? loopingEndAt,
+  });
+
+  /// Set the number of samples to delay before starting to play a sound.
+  ///
+  /// This is used internally by [playClocked]. In the unlikely event that
+  /// you may want to use it manually, it's available here. Note that calling
+  /// this on a "live" voice will cause silence to be inserted at the start
+  /// of the next audio buffer.
+  ///
+  /// [handle] the sound handle.
+  /// [samples] the number of samples to delay the sound with.
+  @mustBeOverridden
+  void setDelaySamples(SoundHandle handle, int samples);
+
+  /// Get the current stream time of a voice.
+  ///
+  /// [handle] the sound handle.
+  /// Returns the stream time. [Duration.zero] if [handle] is invalid.
+  @mustBeOverridden
+  Duration getStreamTime(SoundHandle handle);
+
+  /// Reset the clock used by [playClocked] and [play3dClocked] to the state
+  /// as if they were never called.
+  ///
+  /// The next clocked play will anchor the caller's "physics time" to the
+  /// audio clock again (leading by two output buffers).
+  @mustBeOverridden
+  void resetStreamTime();
+
+  /// Get the engine's global stream time.
+  ///
+  /// This is the clock the mixer advances at the start of every output
+  /// buffer and the time base used by [playScheduled], [stopScheduled] and
+  /// [fadeScheduled]. It only advances while the audio device is mixing.
+  ///
+  /// Returns the engine time.
+  @mustBeOverridden
+  Duration getEngineTime();
+
+  /// Get the engine time of the sample currently reaching the output device:
+  /// the mix clock (see [getEngineTime]) minus the render-ahead ring depth.
+  ///
+  /// Equals [getEngineTime] when the render-ahead ring is disabled (the
+  /// default) and on web.
+  @mustBeOverridden
+  Duration getPlayheadTime();
+
+  /// Estimated output latency: render-ahead ring depth plus one device
+  /// period. [Duration.zero] when the render-ahead ring is disabled (the
+  /// default) and on web.
+  @mustBeOverridden
+  Duration getOutputLatency();
+
+  /// Whether the render-ahead ring (the retroactive re-mix prerequisite) is
+  /// active. Enabled at init time via [initEngine]'s `renderAheadFrames`.
+  /// Always false on web.
+  @mustBeOverridden
+  bool isRenderAheadEnabled();
+
+  /// Start playing a sound at an absolute engine time (see [getEngineTime]),
+  /// with sample accuracy.
+  ///
+  /// Unlike [playClocked] there is no anchor and no re-anchor guard, so
+  /// sounds can be scheduled arbitrarily far in the future. A time in the
+  /// past plays as soon as possible.
+  ///
+  /// [soundHash] the unique sound hash of a sound.
+  /// [atTime] the absolute engine time at which the sound should start.
+  /// [duration] if greater than zero, the sound is automatically stopped
+  /// at [atTime] + [duration].
+  /// [busId] the bus ID to play the sound on. 0 means the main engine.
+  /// [volume] 1.0 full volume.
+  /// [pan] 0.0 centered.
+  /// [scale] relative playback speed multiplier (1.0 = normal speed).
+  /// [looping] whether the sound should loop when reaching the end.
+  /// [loopingStartAt] time to seek to when looping.
+  /// Return the error if any and a new `newHandle` of this sound.
+  @mustBeOverridden
+  ({PlayerErrors error, SoundHandle newHandle}) playScheduled(
+    SoundHash soundHash,
+    Duration atTime, {
+    Duration duration = Duration.zero,
+    int busId = 0,
+    double volume = 1,
+    double pan = 0,
+    double scale = 1,
+    bool looping = false,
+    Duration loopingStartAt = Duration.zero,
+    Duration? loopingEndAt,
+  });
+
+  /// Stop a sound at an absolute engine time (see [getEngineTime]).
+  ///
+  /// A time in the past stops the sound immediately.
+  ///
+  /// [handle] the sound handle.
+  /// [atTime] the absolute engine time at which the sound should stop.
+  @mustBeOverridden
+  void stopScheduled(SoundHandle handle, Duration atTime);
+
+  /// Fade the volume of a sound starting at an absolute engine time
+  /// (see [getEngineTime]).
+  ///
+  /// The fade goes from the volume the sound has at call time to [to] over
+  /// [time]. If [thenStop] is true, the sound is stopped when the fade
+  /// ends (at [atTime] + [time]).
+  ///
+  /// [handle] the sound handle.
+  /// [atTime] the absolute engine time at which the fade should start.
+  /// A time in the past starts the fade immediately.
+  /// [to] the ending volume of the fade.
+  /// [time] the duration of the fade.
+  /// [thenStop] whether to stop the sound when the fade ends.
+  @mustBeOverridden
+  void fadeScheduled(
+    SoundHandle handle,
+    Duration atTime,
+    double to,
+    Duration time, {
+    bool thenStop = false,
+  });
+
+  /// Stop already loaded sound identified by [handle] and clear it.
+  ///
+  /// [handle] the sound handle.
+  /// Returns [PlayerErrors.noError] if success,
+  /// [PlayerErrors.backendNotInited] if the engine is not initialized,
+  /// [PlayerErrors.soundHandleNotFound] if [handle] is not valid (for
+  /// example the voice has already ended).
+  @mustBeOverridden
+  PlayerErrors stop(SoundHandle handle);
+
+  /// Stop all playing voices without disposing the loaded sounds.
+  ///
+  /// Every stopped voice emits a voice-ended event, like calling [stop]
+  /// on each playing handle.
+  @mustBeOverridden
+  void stopAll();
+
+  /// Stop all voices playing the already loaded sound identified by
+  /// [soundHash] without disposing the sound.
+  ///
+  /// Every stopped voice emits a voice-ended event, like calling [stop]
+  /// on each of the sound's handles.
+  @mustBeOverridden
+  void stopAudioSource(SoundHash soundHash);
+
+  /// Stop all handles of the already loaded sound identified
+  /// by [soundHash] and dispose it.
+  ///
+  /// [soundHash] the unique sound hash of a sound.
+  @mustBeOverridden
+  void disposeSound(SoundHash soundHash);
+
+  /// Dispose all sounds already loaded.
+  @mustBeOverridden
+  void disposeAllSound();
+
+  /// Query whether a sound is set to loop.
+  ///
+  /// [handle] the sound handle.
+  /// Returns true if flagged for looping.
+  @mustBeOverridden
+  bool getLooping(SoundHandle handle);
+
+  /// This function can be used to set a sample to play on repeat,
+  /// instead of just playing it once.
+  ///
+  /// [handle] the sound handle.
+  /// [enable] enable or not the looping.
+  @mustBeOverridden
+  void setLooping(SoundHandle handle, bool enable);
+
+  /// Get sound loop point value.
+  ///
+  /// [handle] the sound handle.
+  /// Returns the duration.
+  @mustBeOverridden
+  Duration getLoopPoint(SoundHandle handle);
+
+  /// Set sound loop point value.
+  ///
+  /// [handle] the sound handle.
+  /// [timestamp] the time in which the loop will restart.
+  /// The requested value is visible immediately and takes effect on playback
+  /// at the next 512-frame source refill.
+  @mustBeOverridden
+  void setLoopPoint(SoundHandle handle, Duration timestamp);
+
+  /// Get the exclusive end point of the sound's looping region.
+  ///
+  /// Returns `null` when the stream's natural end is used.
+  @mustBeOverridden
+  Duration? getLoopEndPoint(SoundHandle handle);
+
+  /// Set the exclusive end point of the sound's looping region.
+  ///
+  /// Set [timestamp] to `null` to use the stream's natural end.
+  /// The requested value is visible immediately and takes effect on playback
+  /// at the next 512-frame source refill.
+  @mustBeOverridden
+  void setLoopEndPoint(SoundHandle handle, Duration? timestamp);
+
+  /// Enable or disable audio visualization.
+  ///
+  /// [enabled] whether visualization is enabled.
+  /// [windowSize] power of two window size from 128 to 8192 (default 256).
+  /// [kind] whether to compute wave, FFT, or both.
+  /// [channel] channel selection: [VisualizationChannel.merged] (-1, default),
+  /// [VisualizationChannel.all] (-2), or a specific 0-based channel index.
+  @mustBeOverridden
+  PlayerErrors setVisualizationEnabled(
+    bool enabled, {
+    int windowSize = 256,
+    VisualizationKind kind = VisualizationKind.waveAndFft,
+    int channel = VisualizationChannel.merged,
+  });
+
+  /// Get visualization state.
+  ///
+  /// Return true if enabled.
+  @mustBeOverridden
+  bool getVisualizationEnabled();
+
+  /// Smooth FFT data.
+  ///
+  /// [smooth] must be in the [0.0 ~ 1.0] range.
+  @mustBeOverridden
+  void setFftSmoothing(double smooth);
+
+  /// Sets the decibel range for FFT magnitude normalization.
+  @mustBeOverridden
+  void setFftDecibelRange(double minDecibels, double maxDecibels);
+
+  /// Sets the callback receiving audio visualization data packets from native.
+  @mustBeOverridden
+  void setVisualizationCallback(
+    void Function(AudioVisualizationData data)? callback,
+  );
+
+  /// Get the sound length.
+  ///
+  /// [soundHash] the sound hash.
+  /// Returns sound length.
+  @mustBeOverridden
+  Duration getLength(SoundHash soundHash);
+
+  /// Seek playing to [time] position.
+  ///
+  /// [time] the time position to seek to.
+  /// [handle] the sound handle.
+  /// Returns [PlayerErrors.noError] if success.
+  ///
+  /// NOTE: when seeking an MP3 file loaded using `mode`=`LoadMode.disk` the
+  /// seek operation is performed but there will be delays. This occurs because
+  /// the MP3 codec must compute each frame length to gain a new position.
+  /// The problem is explained in souloud_wavstream.cpp
+  /// in `WavStreamInstance::seek` function.
+  ///
+  /// This mode is useful ie for background music, not for a music player
+  /// where a seek slider for MP3s is a must.
+  /// If you need to seek MP3s without lags, please, use
+  /// `mode`=`LoadMode.memory` instead or other supported audio formats!
+  @mustBeOverridden
+  int seek(SoundHandle handle, Duration time);
+
+  /// Get current sound position..
+  ///
+  /// [handle] the sound handle.
+  /// Returns time position.
+  @mustBeOverridden
+  Duration getPosition(SoundHandle handle);
+
+  /// Get current Global volume.
+  ///
+  /// Returns the volume.
+  @mustBeOverridden
+  double getGlobalVolume();
+
+  /// Set current Global volume.
+  ///
+  /// Returns [PlayerErrors.noError] if success.
+  @mustBeOverridden
+  int setGlobalVolume(double volume);
+
+  /// Get current [handle] volume.
+  ///
+  /// Returns the volume.
+  @mustBeOverridden
+  double getVolume(SoundHandle handle);
+
+  /// Set current [handle] volume.
+  ///
+  /// Returns [PlayerErrors.noError] if success.
+  @mustBeOverridden
+  int setVolume(SoundHandle handle, double volume);
+
+  /// Get a sound's current pan setting.
+  ///
+  /// [handle] the sound handle.
+  /// Returns the range of the pan values is -1 to 1, where -1 is left, 0 is
+  /// middle and and 1 is right.
+  @mustBeOverridden
+  double getPan(SoundHandle handle);
+
+  /// Set a sound's current pan setting.
+  ///
+  /// [handle] the sound handle.
+  /// [pan] the range of the pan values is -1 to 1, where -1 is left, 0 is
+  /// middle and and 1 is right.
+  @mustBeOverridden
+  void setPan(SoundHandle handle, double pan);
+
+  /// Set the left/right volumes directly.
+  /// Note that this does not affect the value returned by getPan.
+  ///
+  /// [handle] the sound handle.
+  /// [panLeft] value for the left pan.
+  /// [panRight] value for the right pan.
+  @mustBeOverridden
+  void setPanAbsolute(SoundHandle handle, double panLeft, double panRight);
+
+  /// Check if the [handle] is still valid.
+  ///
+  /// [handle] handle to check.
+  /// Return true if it still exists.
+  @mustBeOverridden
+  bool getIsValidVoiceHandle(SoundHandle handle);
+
+  /// Returns the number of concurrent sounds that are playing at the moment.
+  @mustBeOverridden
+  int getActiveVoiceCount();
+
+  /// Returns the number of concurrent sounds that are playing a
+  /// specific audio source.
+  @mustBeOverridden
+  int countAudioSource(SoundHash soundHash);
+
+  /// Returns the number of voices the application has told SoLoud to play.
+  @mustBeOverridden
+  int getVoiceCount();
+
+  /// Get a sound's protection state.
+  @mustBeOverridden
+  bool getProtectVoice(SoundHandle handle);
+
+  /// Set the inaudible behavior of a live sound. By default,
+  /// if a sound is inaudible, it's paused, and will resume when it
+  /// becomes audible again. With this function you can tell SoLoud
+  /// to either kill the sound if it becomes inaudible, or to keep
+  /// ticking the sound even if it's inaudible.
+  ///
+  /// [handle] handle to check.
+  /// [mustTick] whether to keep ticking or not when the sound becomes
+  /// inaudible.
+  /// [kill] whether to kill the sound or not when the sound becomes inaudible.
+  @mustBeOverridden
+  void setInaudibleBehavior(SoundHandle handle, bool mustTick, bool kill);
+
+  /// Set a sound's protection state.
+  ///
+  /// Normally, if you try to play more sounds than there are voices,
+  /// SoLoud will kill off the oldest playing sound to make room.
+  /// This will most likely be your background music. This can be worked
+  /// around by protecting the sound.
+  /// If all voices are protected, the result will be undefined.
+  ///
+  /// [handle] handle to check.
+  /// [protect] whether to protect or not.
+  @mustBeOverridden
+  void setProtectVoice(SoundHandle handle, bool protect);
+
+  /// Get the current maximum active voice count.
+  @mustBeOverridden
+  int getMaxActiveVoiceCount();
+
+  /// Set the current maximum active voice count.
+  /// If voice count is higher than the maximum active voice count,
+  /// SoLoud will pick the ones with the highest volume to actually play.
+  /// [maxVoiceCount] the max concurrent sounds that can be played.
+  ///
+  /// NOTE: The number of concurrent voices is limited, as having unlimited
+  /// voices would cause performance issues, as well as lead to unnecessary
+  /// clipping. The default number of concurrent voices is 16, but this can be
+  /// adjusted at runtime. The hard maximum number is 4095, but if more are
+  /// required, SoLoud can be modified to support more. But seriously, if you
+  /// need more than 4095 sounds at once, you're probably going to make
+  /// some serious changes in any case.
+  @mustBeOverridden
+  void setMaxActiveVoiceCount(int maxVoiceCount);
+
+  /////////////////////////////////////////
+  /// voice groups
+  /////////////////////////////////////////
+
+  /// Used to create a new voice group. Returns 0 if not successful.
+  SoundHandle createVoiceGroup();
+
+  /// Deallocates the voice group. Does not stop the voices attached to the
+  /// voice group.
+  ///
+  /// [handle] the group handle to destroy.
+  void destroyVoiceGroup(SoundHandle handle);
+
+  /// Adds voice handle to the voice group. The voice handles can still be
+  /// used separate from the group.
+  /// [voiceGroupHandle] the group handle to add the new [voiceHandles].
+  /// [voiceHandles] voice handles list to add to the [voiceGroupHandle].
+  void addVoicesToGroup(
+    SoundHandle voiceGroupHandle,
+    List<SoundHandle> voiceHandles,
+  );
+
+  /// Checks if the handle is a valid voice group. Does not care if the
+  /// voice group is empty.
+  ///
+  /// [handle] the group handle to check.
+  /// Return true if [handle] is a group handle.
+  bool isVoiceGroup(SoundHandle handle);
+
+  /// Checks whether a voice group is empty. SoLoud automatically trims
+  /// the voice groups of voices that have ended, so the group may be
+  /// empty even though you've added valid voice handles to it.
+  ///
+  /// [handle] group handle to check.
+  /// Return true if the group handle doesn't have any voices.
+  bool isVoiceGroupEmpty(SoundHandle handle);
+
+  // ///////////////////////////////////////
+  //  faders
+  // ///////////////////////////////////////
+
+  /// Smoothly change the global volume over specified [duration].
+  @mustBeOverridden
+  PlayerErrors fadeGlobalVolume(double to, Duration duration);
+
+  /// Smoothly change a channel's volume over specified [duration].
+  @mustBeOverridden
+  PlayerErrors fadeVolume(SoundHandle handle, double to, Duration duration);
+
+  /// Smoothly change a channel's pan setting over specified [duration].
+  @mustBeOverridden
+  PlayerErrors fadePan(SoundHandle handle, double to, Duration duration);
+
+  /// Smoothly change a channel's relative play speed over specified time.
+  @mustBeOverridden
+  PlayerErrors fadeRelativePlaySpeed(
+    SoundHandle handle,
+    double to,
+    Duration time,
+  );
+
+  /// After specified [duration], pause the channel.
+  @mustBeOverridden
+  PlayerErrors schedulePause(SoundHandle handle, Duration duration);
+
+  /// After specified time, stop the channel.
+  @mustBeOverridden
+  PlayerErrors scheduleStop(SoundHandle handle, Duration duration);
+
+  /// Set fader to oscillate the volume at specified frequency.
+  @mustBeOverridden
+  PlayerErrors oscillateVolume(
+    SoundHandle handle,
+    double from,
+    double to,
+    Duration time,
+  );
+
+  /// Set fader to oscillate the panning at specified frequency.
+  @mustBeOverridden
+  PlayerErrors oscillatePan(
+    SoundHandle handle,
+    double from,
+    double to,
+    Duration time,
+  );
+
+  /// Set fader to oscillate the relative play speed at specified frequency.
+  @mustBeOverridden
+  PlayerErrors oscillateRelativePlaySpeed(
+    SoundHandle handle,
+    double from,
+    double to,
+    Duration time,
+  );
+
+  /// Set fader to oscillate the global volume at specified frequency.
+  @mustBeOverridden
+  PlayerErrors oscillateGlobalVolume(double from, double to, Duration time);
+
+  /// Fade a parameter of a filter.
+  ///
+  /// [handle] the handle of the voice to apply the fade. If equal to 0,
+  /// it fades the global filter.
+  /// [filterType] filter to modify a param.
+  /// [attributeId] the attribute index to fade.
+  /// [to] value the attribute should go in [time] duration.
+  /// [time] the fade slope duration.
+  /// Returns [PlayerErrors.noError] if no errors.
+  @mustBeOverridden
+  PlayerErrors fadeFilterParameter(
+    FilterType filterType,
+    int attributeId,
+    double to,
+    double time, {
+    SoundHandle? handle,
+    int? busId,
+  });
+
+  /// Oscillate a parameter of a filter.
+  ///
+  /// [handle] the handle of the voice to apply the fade. If equal to 0,
+  /// it fades the global filter.
+  /// [filterType] filter to modify a param.
+  /// [attributeId] the attribute index to fade.
+  /// [from] the starting value the attribute sould start to oscillate.
+  /// [to] the ending value the attribute sould end to oscillate.
+  /// [time] the fade slope duration.
+  /// Returns [PlayerErrors.noError] if no errors.
+  @mustBeOverridden
+  PlayerErrors oscillateFilterParameter(
+    FilterType filterType,
+    int attributeId,
+    double from,
+    double to,
+    double time, {
+    SoundHandle? handle,
+    int? busId,
+  });
+
+  // ///////////////////////////////////////
+  // Filters
+  // ///////////////////////////////////////
+
+  /// Check if the given filter is active or not.
+  ///
+  /// [filterType] filter to check.
+  /// Returns [PlayerErrors.noError] if no errors and the index of
+  /// the active filter (-1 if the filter is not active).
+  @mustBeOverridden
+  ({PlayerErrors error, int index}) isFilterActive(
+    FilterType filterType, {
+    SoundHash? soundHash,
+    int? busId,
+  });
+
+  /// Get parameters names of the given filter.
+  ///
+  /// [filterType] filter to get param names.
+  /// Returns [PlayerErrors.noError] if no errors and the list of param names.
+  @mustBeOverridden
+  ({PlayerErrors error, List<String> names}) getFilterParamNames(
+    FilterType filterType,
+  );
+
+  /// Add the filter [filterType].
+  ///
+  /// [filterType] filter to add.
+  /// Returns:
+  /// [PlayerErrors.noError] if no errors.
+  /// [PlayerErrors.filterNotFound] if the [filterType] does not exits.
+  /// [PlayerErrors.filterAlreadyAdded] when trying to add an already
+  /// added filter.
+  /// [PlayerErrors.maxNumberOfFiltersReached] when the maximum number of
+  /// filters has been reached (default is 8).
+  @mustBeOverridden
+  PlayerErrors addFilter(
+    FilterType filterType, {
+    SoundHash? soundHash,
+    int? busId,
+  });
+
+  /// Remove the filter [filterType].
+  ///
+  /// [filterType] filter to remove.
+  /// Returns [PlayerErrors.noError] if no errors.
+  @mustBeOverridden
+  PlayerErrors removeFilter(
+    FilterType filterType, {
+    SoundHash? soundHash,
+    int? busId,
+  });
+
+  /// Set the effect parameter with id [attributeId] of [filterType]
+  /// with [value] value.
+  ///
+  /// [handle] the handle to set the filter to. If equal to 0, the filter is
+  /// applyed to the global filter.
+  /// [filterType] filter to modify a param.
+  /// Returns [PlayerErrors.noError] if no errors.
+  @mustBeOverridden
+  PlayerErrors setFilterParams(
+    FilterType filterType,
+    int attributeId,
+    double value, {
+    SoundHandle? handle,
+    int? busId,
+  });
+
+  /// Get the effect parameter value with id [attributeId] of [filterType].
+  ///
+  /// [handle] the handle to get the attribute value from. If equal to 0,
+  /// it gets the global filter.
+  /// [filterType] the filter to modify a parameter.
+  /// Returns the value of the parameter.
+  @mustBeOverridden
+  ({PlayerErrors error, double value}) getFilterParams(
+    FilterType filterType,
+    int attributeId, {
+    SoundHandle? handle,
+    int? busId,
+  });
+
+  // ///////////////////////////////////////
+  //  3D audio methods
+  // ///////////////////////////////////////
+
+  /// play3d() is the 3d version of the play() call.
+  ///
+  /// [posX], [posY], [posZ] are the audio source position coordinates.
+  /// [velX], [velY], [velZ] are the audio source velocity.
+  /// [looping] whether to start the sound in looping state.
+  /// [loopingStartAt] If looping is enabled, the loop point is, by default,
+  /// the start of the stream. The loop start point can be set with this
+  /// parameter. [loopingEndAt] optionally sets the exclusive end of the loop;
+  /// when it is `null`, the stream's natural end is used.
+  /// Returns the handle of the sound, 0 if error.
+  @mustBeOverridden
+  ({PlayerErrors error, SoundHandle newHandle}) play3d(
+    SoundHash soundHash,
+    double posX,
+    double posY,
+    double posZ, {
+    int busId = 0,
+    double velX = 0,
+    double velY = 0,
+    double velZ = 0,
+    double volume = 1,
+    bool paused = false,
+    bool looping = false,
+    Duration loopingStartAt = Duration.zero,
+    Duration? loopingEndAt,
+    int? loopingStartOffsetAt,
+    int? loopingEndOffsetAt,
+    double scale = 1,
+  });
+
+  /// play3dClocked() is the 3d version of the [playClocked] call.
+  ///
+  /// Instead of panning like with the "2d" version of the call, the 3d
+  /// version requires 3d position and optionally velocity vector. Like its
+  /// 2d version, this one delays the start of the sound based on the
+  /// [soundTime] parameter, so that firing off sounds rapidly won't cause
+  /// the sounds to "clump" together at the start of the next sound buffer.
+  ///
+  /// [soundHash] the unique sound hash of a sound.
+  /// [soundTime] your app's "physics time".
+  /// [posX], [posY], [posZ] are the audio source position coordinates.
+  /// [busId] the bus ID to play the sound on. 0 means the main engine.
+  /// [velX], [velY], [velZ] are the audio source velocity.
+  /// [volume] 1.0 full volume.
+  /// Return the error if any and a new `newHandle` of this sound.
+  @mustBeOverridden
+  ({PlayerErrors error, SoundHandle newHandle}) play3dClocked(
+    SoundHash soundHash,
+    Duration soundTime,
+    double posX,
+    double posY,
+    double posZ, {
+    int busId = 0,
+    double velX = 0,
+    double velY = 0,
+    double velZ = 0,
+    double volume = 1,
+    double scale = 1,
+    bool looping = false,
+    Duration loopingStartAt = Duration.zero,
+    Duration? loopingEndAt,
+    int? loopingStartOffsetAt,
+    int? loopingEndOffsetAt,
+  });
+
+  /// play3dScheduled() is the 3d version of the [playScheduled] call.
+  ///
+  /// Instead of panning like with the "2d" version of the call, the 3d
+  /// version requires 3d position and optionally velocity vector. Like its
+  /// 2d version, this one starts playing a sound at an absolute engine time
+  /// (see [getEngineTime]), with sample accuracy.
+  ///
+  /// [soundHash] the unique sound hash of a sound.
+  /// [atTime] the absolute engine time at which the sound should start.
+  /// [duration] if non-zero, the sound is automatically stopped at
+  /// `atTime + duration`.
+  /// [posX], [posY], [posZ] are the audio source position coordinates.
+  /// [busId] the bus ID to play the sound on. 0 means the main engine.
+  /// [velX], [velY], [velZ] are the audio source velocity.
+  /// [volume] 1.0 full volume.
+  /// [scale] relative playback speed multiplier (1.0 = normal speed).
+  /// [looping] whether the sound should loop when reaching the end.
+  /// [loopingStartAt] time to seek to when looping.
+  /// Return the error if any and a new `newHandle` of this sound.
+  @mustBeOverridden
+  ({PlayerErrors error, SoundHandle newHandle}) play3dScheduled(
+    SoundHash soundHash,
+    Duration atTime,
+    double posX,
+    double posY,
+    double posZ, {
+    Duration duration = Duration.zero,
+    int busId = 0,
+    double velX = 0,
+    double velY = 0,
+    double velZ = 0,
+    double volume = 1,
+    double scale = 1,
+    bool looping = false,
+    Duration loopingStartAt = Duration.zero,
+    Duration? loopingEndAt,
+    int? loopingStartOffsetAt,
+    int? loopingEndOffsetAt,
+  });
+
+  /// Since SoLoud has no knowledge of the scale of your coordinates,
+  /// you may need to adjust the speed of sound for these effects
+  /// to work correctly. The default value is 343, which assumes
+  /// that your world coordinates are in meters (where 1 unit is 1 meter),
+  /// and that the environment is dry air at around 20 degrees Celsius.
+  @mustBeOverridden
+  void set3dSoundSpeed(double speed);
+
+  /// Get the sound speed.
+  @mustBeOverridden
+  double get3dSoundSpeed();
+
+  /// You can set the position, at-vector, up-vector and velocity parameters
+  /// of the 3d audio listener with one call.
+  @mustBeOverridden
+  void set3dListenerParameters(
+    double posX,
+    double posY,
+    double posZ,
+    double atX,
+    double atY,
+    double atZ,
+    double upX,
+    double upY,
+    double upZ,
+    double velocityX,
+    double velocityY,
+    double velocityZ,
+  );
+
+  /// You can set the position parameter of the 3d audio listener.
+  @mustBeOverridden
+  void set3dListenerPosition(double posX, double posY, double posZ);
+
+  /// You can set the "at" vector parameter of the 3d audio listener.
+  @mustBeOverridden
+  void set3dListenerAt(double atX, double atY, double atZ);
+
+  /// You can set the "up" vector parameter of the 3d audio listener.
+  @mustBeOverridden
+  void set3dListenerUp(double upX, double upY, double upZ);
+
+  /// You can set the listener's velocity vector parameter.
+  @mustBeOverridden
+  void set3dListenerVelocity(
+    double velocityX,
+    double velocityY,
+    double velocityZ,
+  );
+
+  /// You can set the position and velocity parameters of a live
+  /// 3d audio source with one call.
+  @mustBeOverridden
+  void set3dSourceParameters(
+    SoundHandle handle,
+    double posX,
+    double posY,
+    double posZ,
+    double velocityX,
+    double velocityY,
+    double velocityZ,
+  );
+
+  /// You can set the position parameters of a live 3d audio source.
+  @mustBeOverridden
+  void set3dSourcePosition(
+    SoundHandle handle,
+    double posX,
+    double posY,
+    double posZ,
+  );
+
+  /// You can set the velocity parameters of a live 3d audio source.
+  @mustBeOverridden
+  void set3dSourceVelocity(
+    SoundHandle handle,
+    double velocityX,
+    double velocityY,
+    double velocityZ,
+  );
+
+  /// You can set the minimum and maximum distance parameters
+  /// of a live 3d audio source.
+  @mustBeOverridden
+  void set3dSourceMinMaxDistance(
+    SoundHandle handle,
+    double minDistance,
+    double maxDistance,
+  );
+
+  /// You can change the attenuation model and rolloff factor parameters of
+  /// a live 3d audio source.
+  ///
+  /// NO_ATTENUATION 	      No attenuation
+  /// INVERSE_DISTANCE 	    Inverse distance attenuation model
+  /// LINEAR_DISTANCE 	    Linear distance attenuation model
+  /// EXPONENTIAL_DISTANCE 	Exponential distance attenuation model
+  ///
+  /// see https://solhsa.com/soloud/concepts3d.html
+  @mustBeOverridden
+  void set3dSourceAttenuation(
+    SoundHandle handle,
+    int attenuationModel,
+    double attenuationRolloffFactor,
+  );
+
+  /// You can change the doppler factor of a live 3d audio source.
+  @mustBeOverridden
+  void set3dSourceDopplerFactor(SoundHandle handle, double dopplerFactor);
+
+  // ///////////////////////////////////////
+  // waveform audio data
+  // ///////////////////////////////////////
+
+  /// See SoLoud.readSamplesFromFile for details.
+  @mustBeOverridden
+  Float32List readSamplesFromFile(
+    String completeFileName,
+    int numSamplesNeeded, {
+    double startTime = 0,
+    double endTime = -1,
+    bool average = false,
+  });
+
+  /// See SoLoud.readSamplesFromMem for details.
+  @mustBeOverridden
+  Float32List readSamplesFromMem(
+    Uint8List buffer,
+    int numSamplesNeeded, {
+    double startTime = 0,
+    double endTime = -1,
+    bool average = false,
+  });
+
+  /////////////////////////////////////////
+  /// Mixing Bus
+  /// https://solhsa.com/soloud/mixbus.html
+  /// https://solhsa.com/soloud/soloud_20200207.html#mixing-bus
+  /////////////////////////////////////////
+  ///
+  /// A mixing bus is a special audio source that plays other audio sources
+  /// through it. Useful for grouped volume control, per-bus filtering,
+  /// and per-bus visualization (FFT/wave). Busses can also be nested.
+  /// Only one instance of a bus can play at a time.
+  /// Busses are protected by default and marked as "must tick".
+  /////////////////////////////////////////
+
+  /// Create a new mixing bus.
+  /// Returns a unique bus ID (>0) to reference this bus in other calls.
+  @mustBeOverridden
+  int createBus();
+
+  /// Destroy a mixing bus by its ID.
+  /// Does not stop voices that were playing through the bus.
+  @mustBeOverridden
+  void destroyBus(int busId);
+
+  /// Play the bus itself on the main SoLoud engine so it becomes audible.
+  /// You must call this before sounds routed through the bus can be heard.
+  ///
+  /// [busId] the bus ID returned by createBus.
+  /// [volume] playback volume (1.0 = full).
+  /// [paused] whether to start paused.
+  /// When [paused] is false the output audio device is started off the UI
+  /// thread after the bus voice has been created.
+  ///
+  /// Returns [PlayerErrors.noError] and the voice handle of the bus on
+  /// success, or the error and a zeroed handle on failure.
+  @mustBeOverridden
+  ({PlayerErrors error, SoundHandle handle}) busPlayOnEngine(
+    int busId,
+    double volume,
+    bool paused,
+  );
+
+  /// Set the number of output channels for the bus (default is 2 = stereo).
+  ///
+  /// [busId] the bus ID.
+  /// [channels] number of channels (1 = mono, 2 = stereo (default), etc.).
+  @mustBeOverridden
+  void busSetChannels(int busId, int channels);
+
+  /// Enable or disable visualization data gathering for this bus.
+  /// Must be enabled before calling busCalcFFT, busGetWave,
+  /// or busGetApproximateVolume.
+  ///
+  /// [busId] the bus ID.
+  /// enable true to enable, false to disable.
+  // @mustBeOverridden
+  // void busSetVisualizationEnable(int busId, bool enable);
+
+  /// Calculate and return 256 floats of FFT data for this bus.
+  /// The data ranges from low to high frequencies.
+  /// Visualization must be enabled first with busSetVisualizationEnable.
+  ///
+  /// [busId] the bus ID.
+  /// Returns a pointer to 256 floats, or nullptr if the bus is not found.
+  // @mustBeOverridden
+  // ffi.Pointer<ffi.Float> busCalcFFT(int busId);
+
+  /// Get 256 samples of wave data currently playing through this bus.
+  /// Visualization must be enabled first with busSetVisualizationEnable.
+  ///
+  /// [busId] the bus ID.
+  /// Returns a pointer to 256 floats, or nullptr if the bus is not found.
+  // @mustBeOverridden
+  // ffi.Pointer<ffi.Float> busGetWave(int busId);
+
+  /// Get the approximate output volume for a specific channel of this bus.
+  /// Useful for VU meters or level indicators.
+  /// Visualization must be enabled first.
+  ///
+  /// [busId] the bus ID.
+  /// [channel] the output channel index (0 = left, 1 = right, etc.).
+  /// Returns the approximate volume, or 0 if the bus is not found.
+  @mustBeOverridden
+  double busGetApproximateVolume(int busId, int channel);
+
+  /// Move a live voice (identified by its handle) into this bus.
+  /// The voice will be reparented so it plays through the bus.
+  /// Useful for dynamically routing sounds in/out of filtered busses.
+  ///
+  /// [busId] the bus ID.
+  /// [voiceHandle] handle of the voice to annex.
+  @mustBeOverridden
+  void busAnnexSound(int busId, int voiceHandle);
+
+  /// Get the number of voices currently playing through this bus.
+  ///
+  /// [busId] the bus ID.
+  /// Returns the active voice count, or 0 if the bus is not found.
+  @mustBeOverridden
+  int busGetActiveVoiceCount(int busId);
+}
+
+/// Used for easier conversion from [double] to [Duration].
+extension DoubleToDuration on double {
+  /// Convert the double.
+  Duration toDuration() {
+    return Duration(
+      microseconds: (this * Duration.microsecondsPerSecond).round(),
+    );
+  }
+}
+
+/// Used for easier conversion from [Duration] to [double].
+extension DurationToDouble on Duration {
+  /// Convert the duration.
+  double toDouble() {
+    return inMicroseconds / Duration.microsecondsPerSecond;
+  }
+}

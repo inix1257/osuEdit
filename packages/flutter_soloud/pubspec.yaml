@@ -1,0 +1,101 @@
+name: flutter_soloud
+description: >-
+  A low-level audio plugin for Flutter,
+  mainly meant for games and immersive apps.
+  Based on the SoLoud (C++) audio engine.
+version: 5.1.6
+homepage: https://github.com/alnitak/flutter_soloud
+maintainer: Marco Bavagnoli (@alnitak)
+platforms:
+  android:  
+  ios:
+  linux:
+  macos:
+  windows:
+  web:
+topics:
+  - audio
+  - player
+  - games
+
+screenshots:
+  - description: "audio FFT data"
+    path: img/screenshot.png
+
+environment:
+  sdk: '>=3.11.0 <4.0.0'
+  flutter: '>=3.41.0'
+
+dependencies:
+  code_assets: ^2.0.0
+  ffi: ^2.1.4
+  flutter:
+    sdk: flutter
+  hooks: ^2.2.0
+  http: ^1.3.0
+  logging: ^1.3.0
+  meta: ^1.15.0
+  native_toolchain_c: ^0.19.4
+  path: ^1.9.0
+  path_provider: ^2.1.5
+  plugin_platform_interface: ^2.1.8
+  web: ^1.1.0
+
+dev_dependencies:
+  ffigen: ^19.1.0
+  flutter_test:
+    sdk: flutter
+  test: ^1.24.9
+  very_good_analysis: ^6.0.0
+
+flutter:
+
+  plugin:
+    platforms:
+      android:
+        # Still an FFI plugin: `package`/`pluginClass` only add a plugin object
+        # that observes FlutterEngine lifecycle (hot restart, engine destroy) so
+        # the process-global native engine can be retired with its owner. It
+        # registers no method channel and does no work at attach time.
+        package: flutter.soloud.flutter_soloud
+        pluginClass: FlutterSoloudPlugin
+        ffiPlugin: true
+      ios:
+        # Same arrangement as Android: still an FFI plugin, with a plugin class
+        # whose only job is to observe FlutterEngine lifetime so the
+        # process-global native engine can be retired with its owner. It
+        # registers a lifecycle channel and nothing else, and does no native
+        # work at registration.
+        pluginClass: FlutterSoloudPlugin
+        ffiPlugin: true
+      linux:
+        ffiPlugin: true
+      macos:
+        # As on iOS, with one difference: macOS has no
+        # `detachFromEngineForRegistrar:`, so the plugin takes its own
+        # deallocation as the signal that its FlutterEngine has gone.
+        pluginClass: FlutterSoloudPlugin
+        ffiPlugin: true
+      windows:
+        ffiPlugin: true
+      web:
+        default_package: true
+
+  assets:
+    # These assets are only needed for the web platform.
+    # https://github.com/flutter/flutter/pull/176393
+    - path: web/worker.dart.js
+      platforms: [web]
+    - path: web/libflutter_soloud_plugin.js
+      platforms: [web]
+    - path: web/libflutter_soloud_plugin.wasm
+      platforms: [web]
+    - path: web/libflutter_soloud_plugin_mt.js
+      platforms: [web]
+    - path: web/libflutter_soloud_plugin_mt.wasm
+      platforms: [web]
+    - path: web/init_soloud.js
+      platforms: [web]
+
+funding:
+  - https://github.com/sponsors/alnitak
