@@ -1,7 +1,7 @@
 name: osu_edit
 description: "osu! beatmap editor for Android / iOS (Windows for development)."
 publish_to: 'none'
-version: 0.1.0+1
+version: 0.1.1+2
 
 environment:
   sdk: ^3.13.5
