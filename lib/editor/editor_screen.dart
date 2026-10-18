@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 
 import '../app_fonts.dart';
 import '../core/core.dart';
+import '../home/dev_badge.dart';
 import '../platform/app_settings.dart';
 import '../platform/audio_session.dart';
 import '../platform/beatmap_file_service.dart';
@@ -671,29 +672,6 @@ class _EditorScreenState extends State<EditorScreen> with SingleTickerProviderSt
                 _displaySwitch('Follow points', c.showFollowPoints, (v) => c.showFollowPoints = v),
                 _displaySwitch('Stacking', c.showStacking, (v) => c.showStacking = v),
                 _displaySwitch('Hit animations', c.hitAnimations, (v) => c.hitAnimations = v),
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(
-                    children: [
-                      const Text('Default slider', style: TextStyle(fontSize: 15)),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: SegmentedButton<DefaultSliderType>(
-                          showSelectedIcon: false,
-                          style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                          segments: const [
-                            ButtonSegment(value: DefaultSliderType.auto, label: Text('Default')),
-                            ButtonSegment(value: DefaultSliderType.bezier, label: Text('Bezier')),
-                            ButtonSegment(value: DefaultSliderType.linear, label: Text('Linear')),
-                            ButtonSegment(value: DefaultSliderType.catmull, label: Text('Catmull')),
-                          ],
-                          selected: {c.defaultSliderType},
-                          onSelectionChanged: (s) => c.defaultSliderType = s.first,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Skin', style: TextStyle(fontSize: 15)),
@@ -974,6 +952,7 @@ class _EditorScreenState extends State<EditorScreen> with SingleTickerProviderSt
                               bottom: EditorLayout.of(context).bottomBarHeight,
                               child: _ControlPointsPopup(controller: c, onClose: _closeControlPoints),
                             ),
+                          const Positioned(top: 1, left: 0, right: 0, child: Center(child: DevBadge())),
                           Positioned(
                             // Keyed: the popup appearing before it must not
                             // take over its state (the toast being shown).
@@ -1165,6 +1144,23 @@ class _EditorMenu extends StatelessWidget {
           item('resetsamples', c.selection.isEmpty ? 'Reset all samples' : 'Reset samples of selection'),
           item('resetcolours',
               c.selection.isEmpty ? 'Reset all combo colours' : 'Reset combo colours of selection'),
+          // Curve type of newly drawn sliders ("Default" picks by point count).
+          SubmenuButton(
+            menuChildren: [
+              for (final (type, label) in const [
+                (DefaultSliderType.auto, 'Default'),
+                (DefaultSliderType.bezier, 'Bezier'),
+                (DefaultSliderType.linear, 'Linear'),
+                (DefaultSliderType.catmull, 'Catmull'),
+              ])
+                MenuItemButton(
+                  leadingIcon: Icon(c.defaultSliderType == type ? Icons.check : null, size: 20),
+                  onPressed: () => c.defaultSliderType = type,
+                  child: Text(label),
+                ),
+            ],
+            child: const Text('New slider type'),
+          ),
           const Divider(height: 1),
           item('resnap', c.selection.isEmpty ? 'Resnap all notes (1/${c.divisor})' : 'Resnap selection (1/${c.divisor})'),
           item('movetime', c.selection.isEmpty ? 'Move all notes in time…' : 'Move selection in time…'),
@@ -1266,6 +1262,9 @@ class _BottomBar extends StatelessWidget {
           iconSize: 32,
           style: IconButton.styleFrom(
             fixedSize: Size(64, layout.bottomBarHeight), // fills the strip, icon centred
+            // The default 8 dp padding leaves less than the 32 dp icon in the
+            // strip's height; the squeezed glyph then hangs below centre.
+            padding: EdgeInsets.zero,
             backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
             side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

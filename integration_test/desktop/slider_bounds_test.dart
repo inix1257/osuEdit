@@ -2,7 +2,6 @@
 // playfield (as far as the circle stays on screen, by CS), circles may not.
 //
 // Run: OSUEDIT_BACKGROUND=1 /c/src/flutter/bin/flutter test integration_test/desktop/slider_bounds_test.dart -d windows
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:osu_edit/core/core.dart';
 import 'package:osu_edit/editor/editor_controller.dart';

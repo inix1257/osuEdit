@@ -146,7 +146,10 @@ class MapInfoPanel extends StatelessWidget {
   /// submitted), which shows the button disabled.
   final VoidCallback? onOpenPage;
 
-  const MapInfoPanel({super.key, required this.set, required this.difficulty, this.onOpenPage});
+  /// Shows the "Update" button when set: the website's version differs.
+  final VoidCallback? onUpdate;
+
+  const MapInfoPanel({super.key, required this.set, required this.difficulty, this.onOpenPage, this.onUpdate});
 
   @override
   Widget build(BuildContext context) {
@@ -191,6 +194,23 @@ class MapInfoPanel extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
+            if (onUpdate != null) ...[
+              Tooltip(
+                message: 'The osu! website has a different version of this difficulty',
+                child: FilledButton.icon(
+                  onPressed: onUpdate,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _accent,
+                    foregroundColor: Colors.white,
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                  ),
+                  icon: const Icon(Icons.system_update_alt, size: 16),
+                  label: const Text('Update', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
             MapPageButton(onPressed: onOpenPage),
           ]),
           if (d != null) ...[
@@ -286,7 +306,7 @@ class _DifficultyStats extends StatelessWidget {
         Wrap(runSpacing: 4, children: [
           stat(icon(Icons.schedule), 'LENGTH', _formatLength(s.lastObjectTime)),
           stat(icon(Icons.music_note), 'BPM', _formatBpm(s.minBpm, s.maxBpm)),
-          stat(icon(Icons.bubble_chart), 'OBJECTS', '${s.hitObjectCount}'),
+          stat(icon(Icons.circle), 'OBJECTS', '${s.hitObjectCount}'),
         ]),
         const SizedBox(height: 4),
         Wrap(runSpacing: 4, children: [

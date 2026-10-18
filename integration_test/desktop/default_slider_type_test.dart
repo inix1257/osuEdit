@@ -1,4 +1,4 @@
-// Editor options (Display…) -> Default slider: forces the curve type of
+// Editor menu (Edit -> New slider type): forces the curve type of
 // sliders drawn with the Slider tool, and is kept between maps.
 //
 // Run: OSUEDIT_BACKGROUND=1 /c/src/flutter/bin/flutter test integration_test/desktop/default_slider_type_test.dart -d windows
@@ -21,19 +21,15 @@ void main() {
 
     await tester.tap(find.byTooltip('Menu'));
     await settle(tester, const Duration(milliseconds: 400));
-    await tester.tap(find.text('Settings'));
+    await tester.tap(find.text('Edit'));
     await settle(tester, const Duration(milliseconds: 400));
-    await tester.tap(find.text('Display…'));
+    await tester.tap(find.text('New slider type'));
     await settle(tester, const Duration(milliseconds: 400));
-    expect(find.text('Default slider'), findsOneWidget);
-    await shot(tester, 'default_slider_dialog');
+    await shot(tester, 'default_slider_menu');
 
     await tester.tap(find.text('Catmull'));
     await settle(tester, const Duration(milliseconds: 300));
     expect(c.defaultSliderType, DefaultSliderType.catmull);
-    await shot(tester, 'default_slider_catmull');
-    await tester.tap(find.text('Done'));
-    await settle(tester, const Duration(milliseconds: 300));
 
     for (final p in const [Vec2(100, 100), Vec2(200, 160), Vec2(300, 100)]) {
       c.sliderToolTap(p);

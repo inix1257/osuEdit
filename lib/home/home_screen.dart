@@ -15,11 +15,13 @@ import '../platform/incoming_files.dart';
 import '../platform/beatmap_file_service.dart';
 import '../platform/beatmap_library.dart';
 import '../platform/map_folder.dart';
+import '../platform/map_update_checker.dart';
 import '../platform/preview_audio.dart';
 import '../platform/recovery_store.dart';
 import '../platform/skin_library.dart';
 import '../platform/storyboard_loader.dart';
 import '../platform/web_links.dart';
+import 'dev_badge.dart';
 import 'song_select.dart';
 import 'update_dialog.dart';
 
@@ -803,6 +805,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           if (_busy && _opening == null)
             const Positioned(top: 0, left: 0, right: 0, child: LinearProgressIndicator(minHeight: 3)),
+          const Positioned(top: 2, left: 0, right: 0, child: SafeArea(child: Center(child: DevBadge()))),
           LoadingOverlay(opening: _opening),
         ],
       ),
@@ -829,12 +832,83 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Website copies fetched this session, per beatmap id (null: none there).
+  final _remoteMaps = <int, Uint8List?>{};
+
+  /// Whether the website's version differs, per `path|modified|size` of the
+  /// local file (absent: not checked yet / check failed).
+  final _differs = <String, bool>{};
+  final _checking = <String>{};
+
+  String? _updateKey(LibraryDifficulty d) {
+    try {
+      final f = File(d.path);
+      return '${d.path}|${f.lastModifiedSync().millisecondsSinceEpoch}|${f.lengthSync()}';
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Compares [d] with the osu! website in the background (once per local
+  /// file state); the Update button appears when they differ.
+  void _checkForMapUpdate(LibraryDifficulty d) {
+    final id = d.summary.beatmapId;
+    if (id == null || id <= 0) return;
+    final key = _updateKey(d);
+    if (key == null || _differs.containsKey(key) || !_checking.add(key)) return;
+    () async {
+      try {
+        final cached = _remoteMaps.containsKey(id);
+        final remote = cached ? _remoteMaps[id] : await MapUpdateChecker.fetch(id);
+        _remoteMaps[id] = remote;
+        final different = remote != null && MapUpdateChecker.differs(await File(d.path).readAsBytes(), remote);
+        _differs[key] = different;
+      } catch (_) {
+        // Offline / rate limited: no button, retried on the next selection.
+        _checking.remove(key);
+        return;
+      }
+      _checking.remove(key);
+      if (mounted) setState(() {});
+    }();
+  }
+
+  Future<void> _updateMap(LibraryDifficulty d) async {
+    final id = d.summary.beatmapId;
+    if (id == null) return;
+    final name = d.summary.version.isEmpty ? d.fileName : d.summary.version;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Update "$name"?'),
+        content: const Text('The local file is replaced by the version on the osu! website. '
+            'Your local changes to this difficulty are lost.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Update')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await _run(() async {
+      _remoteMaps.remove(id); // fetch the latest
+      final bytes = await MapUpdateChecker.fetch(id);
+      if (bytes == null) throw 'The osu! website has no file for this difficulty';
+      await File(d.path).writeAsBytes(bytes, flush: true);
+      await _refresh();
+      _snack('Updated "$name"');
+    });
+  }
+
   Widget _buildInfo(LibrarySet set) {
     final d = _selectedDiffOf(set);
     final url = d?.summary.websiteUrl(folderName: set.folderName);
+    if (d != null) _checkForMapUpdate(d);
+    final key = d == null ? null : _updateKey(d);
     return MapInfoPanel(
       set: set,
       difficulty: d,
+      onUpdate: d != null && key != null && _differs[key] == true ? () => _updateMap(d) : null,
       onOpenPage: url == null
           ? null
           : () async {
