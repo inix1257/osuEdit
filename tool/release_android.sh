@@ -8,8 +8,10 @@
 #   2. tool/release_android.sh            # build only, prints the command
 #      tool/release_android.sh --publish  # build + `gh release create`
 #
-# Updates only install over an app signed with the same key: builds currently
-# use the debug key of the machine that built them (android/app/build.gradle.kts).
+# Updates only install over an app signed with the same key: release builds are
+# signed with the keystore named in android/key.properties (not in git; keep a
+# backup of the .jks and its password!). Without that file the build falls back
+# to the machine's debug key and can't update an app installed from a release.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 FLUTTER=${FLUTTER:-/c/src/flutter/bin/flutter}

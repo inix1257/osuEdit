@@ -1,3 +1,13 @@
+import java.util.Properties
+
+// Release signing key (android/key.properties, not in git). Without it the
+// release build falls back to the debug key, which is fine for local runs but
+// can't update an app installed from a release.
+val keyProps = Properties().apply {
+    val f = rootProject.file("key.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -32,11 +42,20 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (keyProps.containsKey("storeFile")) {
+            create("release") {
+                storeFile = file(keyProps.getProperty("storeFile"))
+                storePassword = keyProps.getProperty("storePassword")
+                keyAlias = keyProps.getProperty("keyAlias")
+                keyPassword = keyProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 }
