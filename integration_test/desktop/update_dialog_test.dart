@@ -4,7 +4,6 @@
 // Run: OSUEDIT_BACKGROUND=1 /c/src/flutter/bin/flutter test integration_test/desktop/update_dialog_test.dart -d windows
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:osu_edit/platform/app_updater.dart';
 

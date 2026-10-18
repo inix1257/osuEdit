@@ -15,6 +15,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 FLUTTER=${FLUTTER:-/c/src/flutter/bin/flutter}
+unset OSUEDIT_DEV # the release is the real app, not the .dev one
 version=$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' pubspec.yaml)
 [ -n "$version" ] || { echo "no version in pubspec.yaml" >&2; exit 1; }
 "$FLUTTER" build apk --release --target-platform android-arm64

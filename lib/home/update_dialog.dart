@@ -21,7 +21,10 @@ Future<void> checkForUpdates(BuildContext context, {bool manual = false}) async 
   if (info == null) {
     if (manual) {
       final v = await AppUpdater.currentVersion();
-      messenger.showSnackBar(SnackBar(content: Text("You're up to date${v == null ? '' : ' (v$v)'}")));
+      messenger.showSnackBar(SnackBar(
+          content: Text(AppUpdater.isDevVersion(v)
+              ? 'Development build: updates come from the computer, not from releases'
+              : "You're up to date${v == null ? '' : ' (v$v)'}")));
     }
     return;
   }

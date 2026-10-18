@@ -66,6 +66,10 @@ abstract final class AppUpdater {
   /// page is only a link).
   static bool get supported => debugSupported ?? Platform.isAndroid;
 
+  /// The development app (`OSUEDIT_DEV=1` build, version name `x.y.z-dev`):
+  /// installed from a computer, never updated from a release.
+  static bool isDevVersion(String? version) => version != null && version.endsWith('-dev');
+
   /// The installed `versionName`, or null when unknown.
   static Future<String?> currentVersion() async {
     if (debugVersion != null) return debugVersion;
@@ -189,7 +193,7 @@ abstract final class AppUpdater {
     }
     final current = await currentVersion();
     final cur = current == null ? null : parseVersion(current);
-    if (cur == null) return null;
+    if (cur == null || isDevVersion(current)) return null;
     final latest = pickLatest(await _fetchReleases());
     state['lastCheck'] = DateTime.now().toIso8601String();
     await _writeState(state);

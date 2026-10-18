@@ -8,6 +8,10 @@ val keyProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
+// OSUEDIT_DEV=1 builds the development app: another application id and name, so
+// it installs beside the real (release) app with its own library and settings.
+val devBuild = System.getenv("OSUEDIT_DEV") == "1"
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -37,6 +41,11 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        if (devBuild) {
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+        }
+        manifestPlaceholders["appLabel"] = if (devBuild) "osuEdit Dev" else "osu_edit"
         // On-device input tests (src/androidTest): real multi-finger touches via
         // UiAutomation. See MultiTouchTest.kt for how to run them.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

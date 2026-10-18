@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# 릴리스 APK를 빌드해서 연결된 폰에 덮어쓰기 설치(-r, 라이브러리 유지)하고 실행한다.
+# 개발용 APK("osuEdit Dev", com.osuedit.osu_edit.dev)를 빌드해서 연결된 폰에 덮어쓰기 설치(-r,
+# 라이브러리 유지)하고 실행한다. 실제 앱(com.osuedit.osu_edit, 릴리스)과는 별개의 앱이라 서로 안 건드린다.
 #
 # 사용법 (Git Bash):
 #   tool/deploy_phone.sh              # 빌드 + 설치 + 실행
@@ -10,7 +11,8 @@ set -euo pipefail
 
 FLUTTER=${FLUTTER:-/c/src/flutter/bin/flutter}
 ADB=${ADB:-/c/src/android-sdk/platform-tools/adb.exe}
-PKG=com.osuedit.osu_edit
+PKG=com.osuedit.osu_edit.dev
+export OSUEDIT_DEV=1
 APK=build/app/outputs/flutter-apk/app-release.apk
 
 build=1 shot=0 serial=""
