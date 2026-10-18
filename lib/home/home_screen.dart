@@ -8,6 +8,7 @@ import '../editor/editor_controller.dart';
 import '../editor/editor_screen.dart';
 import '../editor/widgets/skin_picker.dart';
 import '../platform/app_settings.dart';
+import '../platform/app_updater.dart';
 import '../platform/audio_engine.dart';
 import '../platform/background_image.dart';
 import '../platform/incoming_files.dart';
@@ -20,6 +21,7 @@ import '../platform/skin_library.dart';
 import '../platform/storyboard_loader.dart';
 import '../platform/web_links.dart';
 import 'song_select.dart';
+import 'update_dialog.dart';
 
 /// Start screen: the beatmap library plus import / sample / new map.
 class HomeScreen extends StatefulWidget {
@@ -121,6 +123,8 @@ class _HomeScreenState extends State<HomeScreen> {
       // The first preview shouldn't wait for the audio engine to start.
       if (_preview is SoloudPreviewPlayer) AudioEngine.instance.ensureInitialized().ignore();
       await _refresh();
+      // Newer release on GitHub? (Quiet unless there is one.)
+      if (AppUpdater.supported && mounted) checkForUpdates(context).ignore();
     } catch (e) {
       if (mounted) setState(() => _error = 'Library unavailable: $e');
     }
@@ -907,12 +911,14 @@ class _HomeScreenState extends State<HomeScreen> {
             'osu' => _openOsuFile(),
             'defaults' => _openDefaultAppSettings(),
             'skins' => showSkinPicker(context, files: files),
+            'update' => checkForUpdates(context, manual: true),
             _ => null,
           },
           itemBuilder: (_) => [
             const PopupMenuItem(value: 'osu', child: Text('Open single .osu file')),
             const PopupMenuItem(value: 'skins', child: Text('Skins…')),
             if (Platform.isAndroid) const PopupMenuItem(value: 'defaults', child: Text('.osz default app settings')),
+            if (AppUpdater.supported) const PopupMenuItem(value: 'update', child: Text('Check for updates')),
           ],
         ),
       ]),

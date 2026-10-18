@@ -49,6 +49,10 @@ class MainActivity : FlutterActivity() {
                     result.success(openFolder(call.arguments as String))
                 } else if (call.method == "openUrl") {
                     result.success(openUrl(call.arguments as String))
+                } else if (call.method == "appVersion") {
+                    result.success(appVersion())
+                } else if (call.method == "installApk") {
+                    result.success(installApk(call.arguments as String))
                 } else {
                     result.notImplemented()
                 }
@@ -117,6 +121,42 @@ class MainActivity : FlutterActivity() {
     } catch (e: Exception) {
         android.util.Log.w("osuEdit", "Could not open $url", e)
         false
+    }
+
+    /** The installed versionName (pubspec `version` before the `+`). */
+    private fun appVersion(): String? = try {
+        packageManager.getPackageInfo(packageName, 0).versionName
+    } catch (e: Exception) {
+        null
+    }
+
+    /**
+     * Hands a downloaded APK (in the cache's `updates` folder) to the system
+     * installer. Returns "started", "permission" (the "install unknown apps"
+     * switch of this app was off: its settings page is opened) or null.
+     */
+    private fun installApk(path: String): String? {
+        return try {
+            val file = File(path)
+            val updates = File(cacheDir, "updates").canonicalFile
+            if (!file.canonicalFile.startsWith(updates) || !file.name.endsWith(".apk")) return null
+            if (!packageManager.canRequestPackageInstalls()) {
+                startActivity(
+                    Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))
+                )
+                return "permission"
+            }
+            val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.updates", file)
+            startActivity(
+                Intent(Intent.ACTION_VIEW)
+                    .setDataAndType(uri, "application/vnd.android.package-archive")
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            )
+            "started"
+        } catch (e: Exception) {
+            android.util.Log.w("osuEdit", "Could not install $path", e)
+            null
+        }
     }
 
     private fun announce() {
