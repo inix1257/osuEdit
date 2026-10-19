@@ -5,8 +5,8 @@
 // Run: OSUEDIT_BACKGROUND=1 /c/src/flutter/bin/flutter test integration_test/desktop/skin_test.dart -d windows
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:osu_edit/app_dialog.dart';
 import 'package:osu_edit/core/core.dart';
 import 'package:osu_edit/editor/editor_screen.dart';
 import 'package:osu_edit/platform/beatmap_library.dart';
@@ -71,7 +71,7 @@ void main() {
     await settle(tester);
     await tester.tap(find.text('Done').last);
     await settle(tester);
-    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.byType(AppDialog), findsNothing);
     await shot(tester, 'skin_default_circles');
   });
 }

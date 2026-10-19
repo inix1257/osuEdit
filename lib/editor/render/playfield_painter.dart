@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -34,9 +35,6 @@ class PlayfieldPainter extends CustomPainter {
       : super(repaint: Listenable.merge([controller, controller.time, controller.playfieldZoom]));
 
   static final Expando<ui.Path> _bodyPaths = Expando();
-  /// Combo number layouts per radius (the playfield's and the timeline's
-  /// are painted every frame; one cache would keep flushing the other).
-  static final Map<double, Map<int, TextPainter>> _numberCaches = {};
 
   static const _selectionColour = Color(0xFFFFA726);
 
@@ -56,6 +54,12 @@ class PlayfieldPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final zoom = overview ? PlayfieldZoom.none : controller.playfieldZoom.value;
     final tf = PlayfieldTransform.fit(size, zoom);
+    if (!overview) {
+      if (!identical(_bodyImagesOwner, controller)) _clearBodyImages(controller);
+      final scale = tf.scale * _devicePixelRatio;
+      _bodyScaleSettled = scale == _lastBodyScale;
+      _lastBodyScale = scale;
+    }
     canvas.save();
     // Control points may lie outside the playfield; don't paint over the panels.
     canvas.clipRect(Offset.zero & size);
@@ -513,21 +517,11 @@ class PlayfieldPainter extends CustomPainter {
       ..color = Color.fromRGBO(0, 0, 0, 0.22 * alpha));
 
     // The tinted disc: lit from slightly above, shading off toward the rim.
-    canvas.drawCircle(
-      c,
-      rr * 0.98,
-      Paint()
-        ..shader = ui.Gradient.radial(
-          c + Offset(0, -rr * 0.25),
-          rr * 1.25,
-          [
-            _shade(_lighten(tint, 0.45), brightness, alpha * 0.92),
-            _shade(tint, brightness, alpha * 0.92),
-            _shade(_darken(tint, 0.35), brightness, alpha * 0.92),
-          ],
-          const [0, 0.55, 1],
-        ),
-    );
+    canvas.save();
+    canvas.translate(c.dx, c.dy);
+    canvas.scale(rr);
+    canvas.drawCircle(Offset.zero, 0.98, Paint()..shader = _discShader(tint, brightness, alpha));
+    canvas.restore();
 
     // The white overlay ring, with thin dark edges on both sides for depth.
     canvas.drawCircle(c, rr * 0.92, ring
@@ -542,11 +536,35 @@ class PlayfieldPainter extends CustomPainter {
     if (number == null) return;
     final na = numberAlpha ?? alpha;
     if (na <= 0) return;
-    final tp = _numberPainter(number, r, na, brightness);
-    tp.paint(canvas, c - Offset(tp.width / 2, tp.height / 2));
+    _BuiltinDigits.instance.paint(canvas, number, c, r, _imagePaint(na, brightness: brightness));
   }
 
   static const _white = Color(0xFFFFFFFF);
+
+  /// The circle disc's radial gradient for a unit circle at the origin,
+  /// cached per tint, brightness and alpha (both in 1/32 steps): a new
+  /// gradient per circle per frame is a native object each, and thousands
+  /// of them freed together in one GC stalled a frame on the phone.
+  static final _discShaders = <(int, int, int), Shader>{};
+
+  static Shader _discShader(Color tint, double brightness, double alpha) {
+    final b = (brightness.clamp(0.0, 1.0) * 32).round(), a = (alpha.clamp(0.0, 1.0) * 32).round();
+    final key = (tint.toARGB32(), b, a);
+    final cached = _discShaders[key];
+    if (cached != null) return cached;
+    if (_discShaders.length >= 1024) _discShaders.clear();
+    final bf = b / 32, af = a / 32 * 0.92;
+    return _discShaders[key] = ui.Gradient.radial(
+      const Offset(0, -0.25),
+      1.25,
+      [
+        _shade(_lighten(tint, 0.45), bf, af),
+        _shade(tint, bf, af),
+        _shade(_darken(tint, 0.35), bf, af),
+      ],
+      const [0, 0.55, 1],
+    );
+  }
 
   /// Skin pixels -> osu!pixels for hit objects: a standard-definition
   /// texture of 128 px is one object diameter (lazer `OBJECT_RADIUS` = 64)
@@ -606,8 +624,7 @@ class PlayfieldPainter extends CustomPainter {
     if (number != null && numberAlpha > 0) {
       final digits = skin.digits;
       if (digits == null) {
-        final tp = _numberPainter(number, r, numberAlpha, brightness);
-        tp.paint(canvas, c - Offset(tp.width / 2, tp.height / 2));
+        _BuiltinDigits.instance.paint(canvas, number, c, r, _imagePaint(numberAlpha, brightness: brightness));
       } else {
         _drawSkinNumber(canvas, skin, digits, number, c, k, _imagePaint(numberAlpha, brightness: brightness));
       }
@@ -640,46 +657,6 @@ class PlayfieldPainter extends CustomPainter {
   static Color _shade(Color c, double brightness, double alpha) => brightness == 1
       ? c.withValues(alpha: alpha)
       : Color.from(alpha: alpha, red: c.r * brightness, green: c.g * brightness, blue: c.b * brightness);
-
-  /// Text layouts cached per (number, alpha in 10 steps, brightness in 20
-  /// steps) — avoids both per-frame layout and a saveLayer per circle for
-  /// fading. White digits with a dark edge (readable on a white circle).
-  static TextPainter _numberPainter(int n, double r, double alpha, double brightness) {
-    var cache = _numberCaches[r];
-    if (cache == null || cache.length > 1000) {
-      // Few radii are in use at once: drop the others (zoom / CS changes).
-      if (cache != null || _numberCaches.length >= 4) {
-        for (final c in _numberCaches.values) {
-          for (final tp in c.values) {
-            tp.dispose();
-          }
-        }
-        _numberCaches.clear();
-      }
-      cache = _numberCaches[r] = {};
-    }
-    final numberCache = cache;
-    final a = (alpha * 10).round();
-    final b = (brightness * 20).round();
-    final v = (255 * b / 20).round();
-    final edge = (40 * b / 20).round();
-    return numberCache[(n * 11 + a) * 21 + b] ??= (TextPainter(
-      text: TextSpan(
-        text: '$n',
-        style: TextStyle(
-          color: Color.fromRGBO(v, v, v, a / 10),
-          fontSize: r * 0.8,
-          fontFamily: kUiFont,
-          fontWeight: FontWeight.w600,
-          shadows: [
-            for (final o in const [Offset(1, 1), Offset(-1, 1), Offset(1, -1), Offset(-1, -1)])
-              Shadow(color: Color.fromRGBO(edge, edge, edge, a / 10 * 0.8), offset: o * (r / 40), blurRadius: r / 30),
-          ],
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout());
-  }
 
   void _drawApproach(Canvas canvas, Vec2 p, double r, Color colour, double scale, double alpha) {
     final tex = _skin?['approachcircle'];
@@ -800,13 +777,8 @@ class PlayfieldPainter extends CustomPainter {
         paint
           ..strokeWidth = s * 0.32
           ..color = Color.fromRGBO(255, 255, 255, alpha * 0.9);
-        canvas.drawPath(
-          Path()
-            ..moveTo(wing(1).dx, wing(1).dy)
-            ..lineTo(tip.dx, tip.dy)
-            ..lineTo(wing(-1).dx, wing(-1).dy),
-          paint,
-        );
+        // A polyline with round caps (round joins): no per-arrow Path.
+        canvas.drawPoints(ui.PointMode.polygon, [wing(1), tip, wing(-1)], paint);
       });
     }
   }
@@ -856,13 +828,22 @@ class PlayfieldPainter extends CustomPainter {
 
   static final Expando<ui.PathMetric> _bodyMetrics = Expando();
 
+  /// The body path's bounds (the stroke reaches r further): every layer a
+  /// slider uses is limited to them. A layer without bounds is as big as
+  /// the whole view — one per slider on screen per frame.
+  static final Expando<Rect> _bodyBounds = Expando();
+
   void _drawSlider(Canvas canvas, SliderObject s, double t, double end, double r, Color colour, bool selected,
       double preempt, double fadeIn) {
     final path = controller.sliderPath(s);
     final body = _bodyPaths[s] ??= _buildPath(path.vertices);
+    final bounds = _bodyBounds[s] ??= body.getBounds();
 
     // The selection outline isn't snaked (lazer draws it separately).
+    // Only the border band: the inside is cleared so the orange never shows
+    // through the (translucent) body, whatever the time.
     if (selected) {
+      canvas.saveLayer(bounds.inflate(r + 6), Paint());
       canvas.drawPath(
         body,
         Paint()
@@ -872,19 +853,31 @@ class PlayfieldPainter extends CustomPainter {
           ..strokeJoin = StrokeJoin.round
           ..color = _selectionColour,
       );
+      canvas.drawPath(
+        body,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = r * 2 + 2
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..blendMode = BlendMode.clear,
+      );
+      canvas.restore();
     }
     final dim = ObjectVisuals.brightness(t, s.time);
     final bodyAlpha = ObjectVisuals.sliderBodyAlpha(t, s.time, end, preempt, fadeIn);
     if (bodyAlpha > 0) {
       // Snakes in over the first third of the preempt.
       final snake = ObjectVisuals.snakeProgress(t, s.time, preempt);
-      var drawn = body;
-      if (snake < 1) {
-        final metric = _bodyMetrics[s] ??= body.computeMetrics().firstOrNull ?? _emptyMetric;
-        drawn = metric.extractPath(0, metric.length * snake);
+      final track = controller.sliderTrackColour ?? colour, border = controller.sliderBorderColour;
+      if (snake < 1 || !_drawCachedBody(canvas, s, body, bounds, r, track, border, dim, bodyAlpha)) {
+        var drawn = body;
+        if (snake < 1) {
+          final metric = _bodyMetrics[s] ??= body.computeMetrics().firstOrNull ?? _emptyMetric;
+          drawn = metric.extractPath(0, metric.length * snake);
+        }
+        paintSliderBody(canvas, drawn, r, track, border, dim: dim, alpha: bodyAlpha, bounds: bounds.inflate(r + 2));
       }
-      paintSliderBody(canvas, drawn, r, controller.sliderTrackColour ?? colour, controller.sliderBorderColour,
-          dim: dim, alpha: bodyAlpha);
     }
 
     final span = controller.timing.sliderSpanDuration(s, controller.beatmap.sliderMultiplier);
@@ -1020,6 +1013,104 @@ class PlayfieldPainter extends CustomPainter {
 
   static final ui.PathMetric _emptyMetric = (ui.Path()..lineTo(0, 0)).computeMetrics().first;
 
+  /// Whole (not snaking) slider bodies, each rendered once into an image at
+  /// the device resolution it is shown at, then drawn as one textured quad
+  /// with the body's opacity and dim. Drawing the body itself is a layer
+  /// plus ten wide path strokes per slider per frame — the bulk of the GPU
+  /// time with many sliders on screen. Least recently drawn first; made
+  /// again when the zoom, circle size or colours change.
+  static final _bodyImages = LinkedHashMap<SliderObject, _BodyImage>.identity();
+  static int _bodyImagePixels = 0;
+  static EditorController? _bodyImagesOwner;
+
+  /// Pixels kept in [_bodyImages] (4 bytes each), and the largest image.
+  static const _bodyImageBudget = 12 << 20;
+  static const _maxBodyImageSide = 4096;
+
+  /// Device pixels per osu!pixel in the last main-view paint, and whether
+  /// it was the same in the one before: images are only made at a scale
+  /// that holds (not on every frame of a pinch).
+  static double _lastBodyScale = 0;
+  static bool _bodyScaleSettled = false;
+
+  /// Tests: draw every body as paths (to compare with the images).
+  @visibleForTesting
+  static bool debugNoBodyImages = false;
+
+  static double get _devicePixelRatio => ui.PlatformDispatcher.instance.implicitView?.devicePixelRatio ?? 1;
+
+  static void _clearBodyImages(EditorController? owner) {
+    for (final e in _bodyImages.values) {
+      e.image.dispose();
+    }
+    _bodyImages.clear();
+    _bodyImagePixels = 0;
+    _bodyImagesOwner = owner;
+  }
+
+  /// Draws slider [s]'s whole body from [_bodyImages] (rendering it first
+  /// if needed). False when it can't (the overview, a rotated canvas, a
+  /// scale still changing, an image too big): draw the path instead.
+  bool _drawCachedBody(Canvas canvas, SliderObject s, ui.Path body, Rect bounds, double r, Color track, Color? border,
+      double dim, double alpha) {
+    if (overview || debugNoBodyImages) return false;
+    final m = canvas.getTransform();
+    if (m[1] != 0 || m[4] != 0 || m[0] != m[5] || m[0] <= 0) return false;
+    final dpr = _devicePixelRatio;
+    final k = m[0] * dpr; // device pixels per osu!pixel
+    var e = _bodyImages.remove(s);
+    if (e != null && (e.scale != k || e.r != r || e.track != track || e.border != border)) {
+      _bodyImagePixels -= e.image.width * e.image.height;
+      e.image.dispose();
+      e = null;
+    }
+    if (e == null) {
+      if (!_bodyScaleSettled) return false;
+      final area = bounds.inflate(r + 2);
+      // Pixel (0, 0) on a whole device pixel, so the image lands 1:1.
+      final left = ((m[0] * area.left + m[12]) * dpr).floorToDouble();
+      final top = ((m[0] * area.top + m[13]) * dpr).floorToDouble();
+      final w = ((m[0] * area.right + m[12]) * dpr).ceil() - left.toInt();
+      final h = ((m[0] * area.bottom + m[13]) * dpr).ceil() - top.toInt();
+      if (w <= 0 || h <= 0 || w > _maxBodyImageSide || h > _maxBodyImageSide || w * h > _bodyImageBudget ~/ 2) {
+        return false;
+      }
+      final origin = Offset((left / dpr - m[12]) / m[0], (top / dpr - m[13]) / m[0]);
+      final recorder = ui.PictureRecorder();
+      final c = Canvas(recorder);
+      c.scale(k);
+      c.translate(-origin.dx, -origin.dy);
+      paintSliderBody(c, body, r, track, border, bounds: area);
+      final picture = recorder.endRecording();
+      e = _BodyImage(picture.toImageSync(w, h), origin, k, r, track, border);
+      picture.dispose();
+      _bodyImagePixels += w * h;
+      while (_bodyImagePixels > _bodyImageBudget && _bodyImages.isNotEmpty) {
+        final oldest = _bodyImages.keys.first;
+        final old = _bodyImages.remove(oldest)!;
+        _bodyImagePixels -= old.image.width * old.image.height;
+        old.image.dispose();
+      }
+    }
+    _bodyImages[s] = e; // now the most recently drawn
+    final img = e.image;
+    final x = ((m[0] * e.origin.dx + m[12]) * dpr).roundToDouble();
+    final y = ((m[0] * e.origin.dy + m[13]) * dpr).roundToDouble();
+    // Bilinear: exact at 1:1, smooth when the frame is scaled (screenshots).
+    final paint = Paint()
+      ..filterQuality = FilterQuality.low
+      ..color = Color.fromRGBO(0, 0, 0, alpha.clamp(0.0, 1.0));
+    // The body's colours times [dim] (its shadow is black either way).
+    if (dim < 1) paint.colorFilter = ColorFilter.mode(Color.from(alpha: 1, red: dim, green: dim, blue: dim), BlendMode.modulate);
+    canvas.drawImageRect(
+      img,
+      Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble()),
+      Rect.fromLTWH((x / dpr - m[12]) / m[0], (y / dpr - m[13]) / m[0], img.width / k, img.height / k),
+      paint,
+    );
+    return true;
+  }
+
   /// Slider ticks of every span, each with its own lifetime (they pop in
   /// before their time and burst when passed). Returns the latest tick or
   /// repeat time at or before `min(t, end)`, for the follow circle's pulse.
@@ -1132,15 +1223,13 @@ class PlayfieldPainter extends CustomPainter {
     final dir = toward - at;
     final angle = dir.lengthSquared == 0 ? 0.0 : math.atan2(dir.y, dir.x);
     final w = r * 0.5 * scale;
-    final arrow = ui.Path()
-      ..moveTo(-w * 0.45, -w)
-      ..lineTo(w * 0.55, 0)
-      ..lineTo(-w * 0.45, w);
     canvas.save();
     canvas.translate(at.x, at.y);
     canvas.rotate(angle);
-    canvas.drawPath(
-      arrow,
+    // A polyline with round caps (round joins): no per-arrow Path.
+    canvas.drawPoints(
+      ui.PointMode.polygon,
+      [Offset(-w * 0.45, -w), Offset(w * 0.55, 0), Offset(-w * 0.45, w)],
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = r * 0.2 * scale
@@ -1185,6 +1274,48 @@ class PlayfieldPainter extends CustomPainter {
         ..strokeWidth = width(borderPortion + (1 - borderPortion) * i / steps)
         ..color = _shade(Color.lerp(outer, inner, f)!, dim, 0.7));
     }
+    canvas.restore();
+  }
+
+  /// Pill images for [paintStraightBody], per device radius and colours.
+  static final _pillImages = <(double, int, int?), ui.Image>{};
+
+  /// [paintSliderBody] of a straight horizontal body from [x0] to [x1] at
+  /// height [y] (the timeline's): a body rendered once per radius and
+  /// colours into a small image, stretched along its middle (nine-slice)
+  /// — no layer and no path strokes per object per frame.
+  static void paintStraightBody(Canvas canvas, double x0, double x1, double y, double r, Color track, Color? border) {
+    final m = canvas.getTransform();
+    final dpr = _devicePixelRatio;
+    final k = m[0] * dpr;
+    if (debugNoBodyImages || m[1] != 0 || m[4] != 0 || m[0] != m[5] || k <= 0 || (x1 - x0) * k < 1) {
+      paintSliderBody(canvas, ui.Path()..moveTo(x0, y)..lineTo(x1, y), r, track, border,
+          bounds: Rect.fromLTRB(x0 - r, y - r, x1 + r, y + r));
+      return;
+    }
+    final rp = r * k;
+    final half = (rp + 2).ceilToDouble(); // the stroke plus its antialiasing
+    final key = (rp, track.toARGB32(), border?.toARGB32());
+    var img = _pillImages[key];
+    if (img == null) {
+      if (_pillImages.length >= 64) {
+        for (final i in _pillImages.values) {
+          i.dispose();
+        }
+        _pillImages.clear();
+      }
+      final recorder = ui.PictureRecorder();
+      paintSliderBody(Canvas(recorder), ui.Path()..moveTo(half, half)..lineTo(half + 1, half), rp, track, border);
+      final picture = recorder.endRecording();
+      img = _pillImages[key] = picture.toImageSync(2 * half.toInt() + 1, 2 * half.toInt());
+      picture.dispose();
+    }
+    canvas.save();
+    canvas.scale(1 / k); // one unit = one device pixel
+    // On whole device pixels vertically (it only moves sideways).
+    final top = ((m[0] * y + m[13]) * dpr - half).roundToDouble() - m[13] * dpr;
+    canvas.drawImageNine(img, Rect.fromLTWH(half, half, 1, 1),
+        Rect.fromLTRB(x0 * k - half, top, x1 * k + half, top + 2 * half), Paint()..filterQuality = FilterQuality.low);
     canvas.restore();
   }
 
@@ -1344,4 +1475,89 @@ class PlayfieldPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant PlayfieldPainter old) =>
       old.controller != controller || old.overview != overview || old.viewport != viewport;
+}
+
+/// A slider body rendered by [PlayfieldPainter._drawCachedBody]: [image]'s
+/// pixel (0, 0) is at osu!pixel [origin], [scale] device pixels per osu!pixel.
+class _BodyImage {
+  final ui.Image image;
+  final Offset origin;
+  final double scale;
+  final double r;
+  final Color track;
+  final Color? border;
+
+  _BodyImage(this.image, this.origin, this.scale, this.r, this.track, this.border);
+}
+
+/// The built-in combo number font: digits 0–9 as images, white with a soft
+/// dark edge baked in, made once and drawn like a skin's `default-n`
+/// (fading and dimming through the paint). Text shadows instead would be
+/// an offscreen blur pass per shadow per number every frame — with dozens
+/// of numbers on screen (streams, the timeline) that took the phone's GPU
+/// 100–400 ms a frame.
+class _BuiltinDigits {
+  static final instance = _BuiltinDigits._();
+
+  /// Font size the digits are baked at (sharp up to ~2x zoom on a phone).
+  static const _size = 128.0;
+  final _images = <ui.Image>[];
+  final _advances = <double>[];
+  late final double _height;
+  late final double _pad;
+
+  _BuiltinDigits._() {
+    // The look of the former text: weight 600 at 0.8 r, and four shadows of
+    // grey 40 at 80 % offset r / 40 diagonally, blurred r / 30.
+    const offset = _size / 0.8 / 40, blur = _size / 0.8 / 30;
+    _pad = (offset + blur * 2).ceilToDouble();
+    for (var d = 0; d < 10; d++) {
+      final tp = TextPainter(
+        text: TextSpan(
+          text: '$d',
+          style: TextStyle(
+            color: const Color(0xFFFFFFFF),
+            fontSize: _size,
+            fontFamily: kUiFont,
+            fontWeight: FontWeight.w600,
+            shadows: [
+              for (final o in const [Offset(1, 1), Offset(-1, 1), Offset(1, -1), Offset(-1, -1)])
+                Shadow(color: const Color.fromRGBO(40, 40, 40, 0.8), offset: o * offset, blurRadius: blur),
+            ],
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final recorder = ui.PictureRecorder();
+      tp.paint(Canvas(recorder), Offset(_pad, _pad));
+      final picture = recorder.endRecording();
+      _images.add(picture.toImageSync((tp.width + 2 * _pad).ceil(), (tp.height + 2 * _pad).ceil()));
+      picture.dispose();
+      _advances.add(tp.width);
+      if (d == 0) _height = tp.height;
+      tp.dispose();
+    }
+  }
+
+  /// [number] centred on [c] for a circle of radius [r] (text size 0.8 r).
+  void paint(Canvas canvas, int number, Offset c, double r, Paint paint) {
+    final s = r * 0.8 / _size;
+    final digits = [for (final ch in '$number'.codeUnits) ch - 48];
+    var width = 0.0;
+    for (final d in digits) {
+      width += _advances[d];
+    }
+    var x = c.dx - width * s / 2;
+    final top = c.dy - (_height / 2 + _pad) * s;
+    for (final d in digits) {
+      final img = _images[d];
+      canvas.drawImageRect(
+        img,
+        Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble()),
+        Rect.fromLTWH(x - _pad * s, top, img.width * s, img.height * s),
+        paint,
+      );
+      x += _advances[d] * s;
+    }
+  }
 }

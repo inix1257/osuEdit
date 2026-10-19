@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../platform/beatmap_file_service.dart';
 import '../../platform/skin_library.dart';
+import '../../app_dialog.dart';
 
 /// Picks the editor's skin: the built-in look or an imported `.osk`; also
 /// imports and deletes skins. Applied live (the playfield follows
@@ -65,7 +66,7 @@ class _SkinPickerState extends State<_SkinPicker> {
   Future<void> _delete(SkinInfo skin) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: const Text('Delete skin?'),
         content: Text('"${skin.name}" will be removed from the app.'),
         actions: [
@@ -86,7 +87,7 @@ class _SkinPickerState extends State<_SkinPicker> {
   @override
   Widget build(BuildContext context) {
     final skins = _skins;
-    return AlertDialog(
+    return AppDialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
       titlePadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
       contentPadding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
@@ -109,12 +110,6 @@ class _SkinPickerState extends State<_SkinPicker> {
                   children: [
                     _tile(null, 'Default', 'Built-in look'),
                     for (final s in skins) _tile(s, s.name, s.author == null ? null : 'by ${s.author}'),
-                    if (skins.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.fromLTRB(12, 4, 12, 4),
-                        child: Text('Import an osu! skin (.osk) to draw circles, sliders and numbers with it. '
-                            'Opening a .osk file with this app imports it too.'),
-                      ),
                     if (_message != null)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),

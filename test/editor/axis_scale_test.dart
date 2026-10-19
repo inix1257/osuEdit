@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:osu_edit/toast.dart';
 import 'package:osu_edit/core/core.dart';
 import 'package:osu_edit/editor/editor_controller.dart';
 import 'package:osu_edit/editor/editor_screen.dart';
@@ -149,7 +150,7 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       final c = _circles(at);
-      await tester.pumpWidget(MaterialApp(home: EditorScreen(controller: c)));
+      await tester.pumpWidget(MaterialApp(builder: (_, child) => ToastHost(child: child), home: EditorScreen(controller: c)));
       c.seek(1000);
       for (final h in c.beatmap.hitObjects) {
         c.select(h, additive: true);

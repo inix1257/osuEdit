@@ -24,6 +24,8 @@ import '../platform/web_links.dart';
 import 'dev_badge.dart';
 import 'song_select.dart';
 import 'update_dialog.dart';
+import '../toast.dart';
+import '../app_dialog.dart';
 
 /// Start screen: the beatmap library plus import / sample / new map.
 class HomeScreen extends StatefulWidget {
@@ -159,7 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// a moment so a quick scan is still noticeable.
   Future<void> _refreshWithFeedback() async {
     if (_busy || _opening != null) return;
-    setState(() => _opening = const OpeningMap(title: 'Scanning the beatmap library', message: 'Refreshing…'));
+    setState(() => _opening = const OpeningMap(title: '', message: ''));
     try {
       await Future.wait([_refresh(), Future<void>.delayed(const Duration(milliseconds: 700))]);
     } catch (e) {
@@ -190,12 +192,11 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Runs [job] with a progress indicator and reports failures.
   Future<void> _run(Future<void> Function() job) async {
     if (_busy) return;
-    final messenger = ScaffoldMessenger.of(context);
     setState(() => _busy = true);
     try {
       await job();
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('$e')));
+      AppToast.show('$e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -233,7 +234,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final name = picked.loaded.document.fileName;
     final choice = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: const Text('Import beatmap?'),
         content: Text('Import "$name" into the library as a new beatmap set? '
             'Its audio and background are copied too when they are in the same folder.'),
@@ -362,7 +363,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final convert = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: const Text('osu!lazer slider format'),
         content: Text(
           '$what has $count ${count == 1 ? 'slider' : 'sliders'} in osu!lazer\'s format '
@@ -433,7 +434,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _deleteDifficulty(LibraryDifficulty d) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: Text('Delete "${d.summary.version.isEmpty ? d.fileName : d.summary.version}"?'),
         content: Text("The file ${d.fileName} is deleted from the set. This can't be undone."),
         actions: [
@@ -452,7 +453,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _deleteSet(LibrarySet set) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: const Text('Delete set?'),
         content: Text('"${set.folderName}" and all its files will be removed from the library.'),
         actions: [
@@ -482,7 +483,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final r = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: const Text('Recover unsaved changes?'),
         content: Text('This map has changes that were not saved (autosaved $when). '
             'Open them, or discard them and open the saved file?'),
@@ -513,7 +514,6 @@ class _HomeScreenState extends State<HomeScreen> {
   /// from the carousel).
   Future<void> _openLoaded(Future<LoadedBeatmapFile?> load, {OpeningMap? opening}) async {
     final navigator = Navigator.of(context);
-    final messenger = ScaffoldMessenger.of(context);
     _setOpening(opening);
     try {
       final loaded = await load;
@@ -523,9 +523,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final warnings = <String>[];
       var beatmap = OsuParser.parse(loaded.text, warnings: warnings);
       if (warnings.isNotEmpty) {
-        messenger.showSnackBar(SnackBar(
-          content: Text('${warnings.length} line(s) could not be parsed and will be dropped on save.'),
-        ));
+        AppToast.show('${warnings.length} line(s) could not be parsed and will be dropped on save.');
       }
       // Sliders in osu!lazer's format: library sets ask once per set (sets
       // imported before this was asked), other files every time.
@@ -563,7 +561,7 @@ class _HomeScreenState extends State<HomeScreen> {
       await _openEditor(navigator, beatmap, doc,
           lazerSliders: lazerSliders, convertSliders: convert, recovered: recovered);
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Could not open: $e')));
+      AppToast.show('Could not open: $e');
     } finally {
       _setOpening(null);
     }
@@ -576,17 +574,16 @@ class _HomeScreenState extends State<HomeScreen> {
     EditorAudio? audio;
     final setPath = doc.setPath;
     if (setPath != null) {
-      final messenger = ScaffoldMessenger.of(context);
       setState(() => _busy = true);
       try {
         // The editor's music takes over.
         await _preview.stop();
         audio = await widget.audioLoader(setPath, beatmap);
         if (audio == null && beatmap.audioFilename.isNotEmpty) {
-          messenger.showSnackBar(SnackBar(content: Text('Audio file "${beatmap.audioFilename}" not found; editing without sound.')));
+          AppToast.show('Audio file "${beatmap.audioFilename}" not found; editing without sound.');
         }
       } catch (e) {
-        messenger.showSnackBar(SnackBar(content: Text('Could not load audio ($e); editing without sound.')));
+        AppToast.show('Could not load audio ($e); editing without sound.');
       } finally {
         if (mounted) setState(() => _busy = false);
       }
@@ -691,7 +688,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _snack(String text) {
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    if (mounted) AppToast.show(text);
   }
 
   // ---------------------------------------------------------------------------
@@ -879,7 +876,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final name = d.summary.version.isEmpty ? d.fileName : d.summary.version;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: Text('Update "$name"?'),
         content: const Text('The local file is replaced by the version on the osu! website. '
             'Your local changes to this difficulty are lost.'),

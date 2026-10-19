@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:osu_edit/toast.dart';
 import 'package:osu_edit/core/core.dart';
 import 'package:osu_edit/editor/editor_screen.dart';
 import 'package:osu_edit/home/home_screen.dart';
@@ -73,7 +74,7 @@ void main() {
   }
 
   testWidgets('empty library shows the hint', (tester) async {
-    await tester.pumpWidget(MaterialApp(home: HomeScreen(library: lib, previewPlayer: preview)));
+    await tester.pumpWidget(MaterialApp(builder: (_, child) => ToastHost(child: child), home: HomeScreen(library: lib, previewPlayer: preview)));
     await settleIo(tester);
     expect(find.textContaining('No beatmaps yet'), findsOneWidget);
     expect(find.text('Import .osz'), findsOneWidget);
@@ -84,7 +85,7 @@ void main() {
     final set = (await tester.runAsync(() => lib.importOsz(OszCodec.encode([PackageEntry('a.osu', bytes)]))))!;
     final summary = set.difficulties.single.summary;
 
-    await tester.pumpWidget(MaterialApp(home: HomeScreen(library: lib, previewPlayer: preview)));
+    await tester.pumpWidget(MaterialApp(builder: (_, child) => ToastHost(child: child), home: HomeScreen(library: lib, previewPlayer: preview)));
     await settleIo(tester);
     expect(setCard(set.title), findsOneWidget);
 
@@ -111,7 +112,7 @@ void main() {
     final b = Uint8List.fromList(File('test/fixtures/sync_test_v14.osu').readAsBytesSync());
     final setA = (await tester.runAsync(() => lib.importOsz(OszCodec.encode([PackageEntry('a.osu', a)]))))!;
     final setB = (await tester.runAsync(() => lib.importOsz(OszCodec.encode([PackageEntry('b.osu', b)]))))!;
-    await tester.pumpWidget(MaterialApp(home: HomeScreen(library: lib, previewPlayer: preview)));
+    await tester.pumpWidget(MaterialApp(builder: (_, child) => ToastHost(child: child), home: HomeScreen(library: lib, previewPlayer: preview)));
     await settleIo(tester);
     // Nothing plays until a set is opened; its difficulties are hidden.
     expect(preview.calls, isEmpty);
@@ -154,7 +155,7 @@ void main() {
     final sync = Uint8List.fromList(File('test/fixtures/sync_test_v14.osu').readAsBytesSync());
     final set = (await tester.runAsync(
         () => lib.importOsz(OszCodec.encode([PackageEntry('a.osu', shapes), PackageEntry('b.osu', sync)]))))!;
-    await tester.pumpWidget(MaterialApp(home: HomeScreen(library: lib, previewPlayer: preview)));
+    await tester.pumpWidget(MaterialApp(builder: (_, child) => ToastHost(child: child), home: HomeScreen(library: lib, previewPlayer: preview)));
     await settleIo(tester);
     await tester.tap(setCard(set.title));
     await tester.pumpAndSettle();
@@ -206,7 +207,7 @@ void main() {
   });
 
   testWidgets('New map: cancelling the audio picker creates nothing', (tester) async {
-    await tester.pumpWidget(MaterialApp(home: HomeScreen(library: lib, files: FakeFiles(), previewPlayer: preview)));
+    await tester.pumpWidget(MaterialApp(builder: (_, child) => ToastHost(child: child), home: HomeScreen(library: lib, files: FakeFiles(), previewPlayer: preview)));
     await settleIo(tester);
     await tester.runAsync(() async {
       await tester.tap(find.text('New map'));
@@ -226,7 +227,7 @@ void main() {
     final (text, enc) = OsuTextCodec.decode(bytes);
     final files = FakeFiles(
         osu: PickedOsu(LoadedBeatmapFile(BeatmapDocument(fileName: 'map.osu', encoding: enc), text), bytes, folder.path));
-    await tester.pumpWidget(MaterialApp(home: HomeScreen(library: lib, files: files, previewPlayer: preview)));
+    await tester.pumpWidget(MaterialApp(builder: (_, child) => ToastHost(child: child), home: HomeScreen(library: lib, files: files, previewPlayer: preview)));
     await settleIo(tester);
     // The options menu has no sample map any more.
     await tester.tap(find.byTooltip('More'));
@@ -260,7 +261,7 @@ void main() {
     final bytes = Uint8List.fromList(File('test/fixtures/sync_test_v14.osu').readAsBytesSync());
     final set = (await tester.runAsync(() => lib.importOsz(OszCodec.encode([PackageEntry('a.osu', bytes)]))))!;
     await tester.runAsync(lib.computeStarRatings);
-    await tester.pumpWidget(MaterialApp(home: HomeScreen(library: lib, previewPlayer: preview)));
+    await tester.pumpWidget(MaterialApp(builder: (_, child) => ToastHost(child: child), home: HomeScreen(library: lib, previewPlayer: preview)));
     await settleIo(tester);
     await tester.tap(setCard(set.title));
     await tester.pumpAndSettle();
@@ -294,7 +295,7 @@ void main() {
   testWidgets('files handed over by other apps are imported when the native side reports them', (tester) async {
     final inbox = Directory(BeatmapLibrary.joinPath(temp.path, 'Inbox'));
     lib = BeatmapLibrary(Directory(BeatmapLibrary.joinPath(temp.path, 'Songs')), inboxes: [inbox]);
-    await tester.pumpWidget(MaterialApp(home: HomeScreen(library: lib, previewPlayer: preview)));
+    await tester.pumpWidget(MaterialApp(builder: (_, child) => ToastHost(child: child), home: HomeScreen(library: lib, previewPlayer: preview)));
     await settleBusy(tester);
 
     // What MainActivity / OszReceiver do: copy into the inbox, then notify.
@@ -336,7 +337,7 @@ void main() {
     // Mounted in real async time: the import started from the "ready" reply
     // runs an isolate whose result never reaches fake-async code.
     await tester.runAsync(() async {
-      await tester.pumpWidget(MaterialApp(home: HomeScreen(library: lib, previewPlayer: preview)));
+      await tester.pumpWidget(MaterialApp(builder: (_, child) => ToastHost(child: child), home: HomeScreen(library: lib, previewPlayer: preview)));
       for (var i = 0; i < 30 && inbox.listSync().isNotEmpty; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 100));
       }

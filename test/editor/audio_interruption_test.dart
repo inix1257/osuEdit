@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:osu_edit/toast.dart';
 import 'package:osu_edit/core/core.dart';
 import 'package:osu_edit/editor/editor_controller.dart';
 import 'package:osu_edit/editor/editor_screen.dart';
@@ -13,7 +14,7 @@ void main() {
     addTearDown(tester.view.reset);
     final b = Beatmap.empty()..insertTimingPoint(TimingPoint.red(time: 0, bpm: 120));
     final c = EditorController(beatmap: b, document: const BeatmapDocument(fileName: 'x.osu'));
-    await tester.pumpWidget(MaterialApp(home: EditorScreen(controller: c)));
+    await tester.pumpWidget(MaterialApp(builder: (_, child) => ToastHost(child: child), home: EditorScreen(controller: c)));
 
     c.togglePlay();
     await tester.pump(const Duration(milliseconds: 100));

@@ -13,6 +13,7 @@ import '../home/dev_badge.dart';
 import '../platform/app_settings.dart';
 import '../platform/audio_session.dart';
 import '../platform/beatmap_file_service.dart';
+import '../platform/frame_stats.dart';
 import '../platform/beatmap_library.dart';
 import '../platform/map_folder.dart';
 import 'editor_controller.dart';
@@ -28,7 +29,10 @@ import 'widgets/hitsound_view.dart';
 import 'widgets/mini_timeline.dart';
 import 'widgets/playfield_view.dart';
 import 'widgets/skin_picker.dart';
+import 'widgets/time_text.dart';
 import 'widgets/timeline_view.dart';
+import '../toast.dart';
+import '../app_dialog.dart';
 
 String formatEditorTime(double ms) {
   final neg = ms < 0;
@@ -99,6 +103,7 @@ class _EditorScreenState extends State<EditorScreen> with SingleTickerProviderSt
     // Drives `controller.time` from the clock every frame, only while
     // playing (an always-running ticker would keep the GPU busy when idle).
     _ticker = createTicker((_) => c.tick());
+    if (FrameStats.enabled) FrameStats.timeSource = () => (c.time.value, c.rate);
     c.trackDifficulty();
     // Unsaved edits are autosaved now and then, and whenever the app goes
     // to the background (where Android may kill it).
@@ -207,17 +212,11 @@ class _EditorScreenState extends State<EditorScreen> with SingleTickerProviderSt
   }
 
   /// A narrow floating note: the play button (bottom right) stays usable.
-  void _audioNote(String text) => ScaffoldMessenger.maybeOf(context)
-    ?..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(
-        content: Text(text),
-        behavior: SnackBarBehavior.floating,
-        width: 380,
-        duration: const Duration(seconds: 3),
-      ));
+  void _audioNote(String text) => AppToast.show(text);
 
   @override
   void dispose() {
+    FrameStats.timeSource = null;
     c.removeListener(_syncTicker);
     c.lastHistoryStep.removeListener(_showHistoryStep);
     _interruptions?.cancel();
@@ -231,23 +230,21 @@ class _EditorScreenState extends State<EditorScreen> with SingleTickerProviderSt
   }
 
   Future<void> _save() async {
-    final messenger = ScaffoldMessenger.of(context);
     try {
       final ok = await c.save();
-      if (ok) messenger.showSnackBar(SnackBar(content: Text('Saved ${c.document.fileName}')));
+      if (ok) AppToast.show('Saved ${c.document.fileName}');
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Save failed: $e')));
+      AppToast.show('Save failed: $e');
     }
   }
 
   /// Mapping Tools' "Hitsound copier": this difficulty's hitsounds into the
   /// chosen other difficulties of the set (on disk), with an Undo.
   Future<void> _copyHitsounds() async {
-    final messenger = ScaffoldMessenger.of(context);
     final others = await c.otherDifficulties();
     if (!mounted) return;
     if (others.isEmpty) {
-      messenger.showSnackBar(const SnackBar(content: Text('No other difficulties in this set')));
+      AppToast.show('No other difficulties in this set');
       return;
     }
     final choice = await showDialog<_HitsoundCopyChoice>(
@@ -263,13 +260,14 @@ class _EditorScreenState extends State<EditorScreen> with SingleTickerProviderSt
     );
     if (!mounted) return;
     final n = previous.length;
-    messenger.showSnackBar(SnackBar(
-      content: Text(n == 0
+    AppToast.show(
+      n == 0
           ? 'The chosen difficulties already sound like this one'
-          : 'Copied hitsounds to $n difficult${n == 1 ? 'y' : 'ies'}'),
-      action: n == 0 ? null : SnackBarAction(label: 'Undo', onPressed: () => c.restoreDifficulties(previous)),
+          : 'Copied hitsounds to $n difficult${n == 1 ? 'y' : 'ies'}',
+      actionLabel: n == 0 ? null : 'Undo',
+      onAction: n == 0 ? null : () => c.restoreDifficulties(previous),
       duration: const Duration(seconds: 8),
-    ));
+    );
   }
 
   /// osu!'s "Open song folder": the set's folder in the system file browser
@@ -277,23 +275,21 @@ class _EditorScreenState extends State<EditorScreen> with SingleTickerProviderSt
   Future<void> _openMapFolder() async {
     final dir = _mapFolderOf(c);
     if (dir == null) return;
-    final messenger = ScaffoldMessenger.of(context);
     final result = await MapFolder.open(dir);
     final text = switch (result) {
       MapFolderResult.opened => c.isDirty ? 'Unsaved changes are not in the folder until you save' : null,
       MapFolderResult.openedLibraryRoot => 'Opened the osuEdit library in Files: the map is in "${dir.split(RegExp(r'[\\/]')).last}"',
       MapFolderResult.failed => 'Could not open the folder (no file manager found)',
     };
-    if (text != null) messenger.showSnackBar(SnackBar(content: Text(text)));
+    if (text != null) AppToast.show(text);
   }
 
   Future<void> _exportOsz() async {
-    final messenger = ScaffoldMessenger.of(context);
     try {
       final ok = await c.exportOsz();
-      if (ok) messenger.showSnackBar(const SnackBar(content: Text('Exported .osz')));
+      if (ok) AppToast.show('Exported .osz');
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Export failed: $e')));
+      AppToast.show('Export failed: $e');
     }
   }
 
@@ -303,17 +299,16 @@ class _EditorScreenState extends State<EditorScreen> with SingleTickerProviderSt
     Future<void> Function(PickedFile) import,
     String done,
   ) async {
-    final messenger = ScaffoldMessenger.of(context);
     try {
       final file = await pick();
       if (file == null) return;
       await import(file);
       final error = c.audioError;
-      messenger.showSnackBar(SnackBar(content: Text(error ?? done)));
+      AppToast.show(error ?? done);
     } on FormatException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+      AppToast.show(e.message);
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('$e')));
+      AppToast.show('$e');
     }
   }
 
@@ -324,7 +319,7 @@ class _EditorScreenState extends State<EditorScreen> with SingleTickerProviderSt
     if (!c.isDirty) return true;
     final r = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: const Text('Unsaved changes'),
         content: const Text('Discard changes and close the editor?'),
         actions: [
@@ -348,7 +343,6 @@ class _EditorScreenState extends State<EditorScreen> with SingleTickerProviderSt
   /// Creates a new (empty or duplicated) difficulty in the set and offers
   /// to switch to it.
   Future<void> _newDifficulty({required bool copy}) async {
-    final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     final name = await showDialog<String>(
       context: context,
@@ -364,13 +358,13 @@ class _EditorScreenState extends State<EditorScreen> with SingleTickerProviderSt
     try {
       path = await c.createDifficulty(name, copyObjects: copy);
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Could not create difficulty: $e')));
+      AppToast.show('Could not create difficulty: $e');
       return;
     }
     if (path == null || !mounted) return;
     final open = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: Text('Created "$name"'),
         content: Text(c.isDirty ? 'Open it now? Your changes here will be saved first.' : 'Open it now?'),
         actions: [
@@ -419,7 +413,6 @@ class _EditorScreenState extends State<EditorScreen> with SingleTickerProviderSt
 
   /// Seeks to a pasted modding timestamp and selects the objects it names.
   Future<void> _goToTimestamp() async {
-    final messenger = ScaffoldMessenger.of(context);
     var initial = '';
     try {
       final clip = (await Clipboard.getData(Clipboard.kTextPlain))?.text ?? '';
@@ -440,12 +433,12 @@ class _EditorScreenState extends State<EditorScreen> with SingleTickerProviderSt
     if (text == null) return;
     final ts = EditorTimestamp.parse(text);
     if (ts == null) {
-      messenger.showSnackBar(const SnackBar(content: Text('No timestamp found (mm:ss:mmm)')));
+      AppToast.show('No timestamp found (mm:ss:mmm)');
       return;
     }
     final n = c.goToTimestamp(ts);
     if (n < ts.combos.length) {
-      messenger.showSnackBar(SnackBar(content: Text('Selected $n of ${ts.combos.length} objects')));
+      AppToast.show('Selected $n of ${ts.combos.length} objects');
     }
   }
 
@@ -510,7 +503,7 @@ class _EditorScreenState extends State<EditorScreen> with SingleTickerProviderSt
     final text = n == 0
         ? 'No $what to reset${all ? '' : ' in the selection'}'
         : 'Reset $what on $n object${n == 1 ? '' : 's'}';
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    AppToast.show(text);
   }
 
   /// stable's "Resnap all notes" (or the selection) to the current snap.
@@ -520,7 +513,7 @@ class _EditorScreenState extends State<EditorScreen> with SingleTickerProviderSt
     final text = n == 0
         ? 'Every ${all ? 'note' : 'selected note'} is already on 1/${c.divisor}'
         : 'Resnapped $n object${n == 1 ? '' : 's'} to 1/${c.divisor}';
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    AppToast.show(text);
   }
 
   /// Asks for an offset in ms and moves all notes (or the selection) by it.
@@ -530,7 +523,7 @@ class _EditorScreenState extends State<EditorScreen> with SingleTickerProviderSt
     if (ms == null || !mounted) return;
     final n = c.moveNotesInTime(ms.toDouble());
     final text = n == 0 ? 'Nothing to move' : 'Moved $n object${n == 1 ? '' : 's'} by ${ms > 0 ? '+' : ''}$ms ms';
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    AppToast.show(text);
   }
 
   /// stable's "Revert to saved": back through the history when the saved
@@ -538,18 +531,17 @@ class _EditorScreenState extends State<EditorScreen> with SingleTickerProviderSt
   /// the file from the library.
   Future<void> _revert() async {
     if (!c.isDirty) return;
-    final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     final inHistory = c.canRevertInHistory;
     final path = c.document.path;
     final reopen = !inHistory && c.document.isInLibrary && path != null;
     if (!inHistory && !reopen) {
-      messenger.showSnackBar(const SnackBar(content: Text('The saved version is no longer in the undo history.')));
+      AppToast.show('The saved version is no longer in the undo history.');
       return;
     }
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: const Text('Revert to saved?'),
         content: Text(
           inHistory
@@ -565,7 +557,7 @@ class _EditorScreenState extends State<EditorScreen> with SingleTickerProviderSt
     if (ok != true || !mounted) return;
     if (inHistory) {
       c.revertToSaved();
-      messenger.showSnackBar(const SnackBar(content: Text('Reverted to the saved version')));
+      AppToast.show('Reverted to the saved version');
     } else {
       await c.discardAutosave();
       navigator.pop(path); // the library screen reopens it from disk
@@ -575,19 +567,16 @@ class _EditorScreenState extends State<EditorScreen> with SingleTickerProviderSt
   /// Deletes this difficulty from the set (asks first; not undoable) and
   /// closes the editor.
   Future<void> _deleteDifficulty() async {
-    final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     final count = await c.setDifficultyCount();
     if (!mounted) return;
     if (count < 2) {
-      messenger.showSnackBar(const SnackBar(
-        content: Text('This is the only difficulty of the set; delete the set from the library instead.'),
-      ));
+      AppToast.show('This is the only difficulty of the set; delete the set from the library instead.');
       return;
     }
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: Text('Delete "${c.beatmap.version}"?'),
         content: Text("The file ${c.document.fileName} is deleted from the set. This can't be undone."),
         actions: [
@@ -604,11 +593,11 @@ class _EditorScreenState extends State<EditorScreen> with SingleTickerProviderSt
     try {
       if (!await c.deleteThisDifficulty()) return;
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Could not delete: $e')));
+      AppToast.show('Could not delete: $e');
       return;
     }
     await c.discardAutosave();
-    messenger.showSnackBar(SnackBar(content: Text('Deleted ${c.document.fileName}')));
+    AppToast.show('Deleted ${c.document.fileName}');
     navigator.pop();
   }
 
@@ -637,7 +626,7 @@ class _EditorScreenState extends State<EditorScreen> with SingleTickerProviderSt
   /// row fits a landscape phone without scrolling.
   void _showDisplaySettings() => showDialog<void>(
     context: context,
-    builder: (_) => AlertDialog(
+    builder: (_) => AppDialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
       titlePadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
       contentPadding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
@@ -1230,16 +1219,7 @@ class _BottomBar extends StatelessWidget {
             child: SizedBox(
               width: 96,
               height: 40,
-              child: Center(
-                child: ValueListenableBuilder<double>(
-                  valueListenable: c.time,
-                  builder: (context, t, _) => Text(
-                    formatEditorTime(t),
-                    maxLines: 1,
-                    style: monoNumbers,
-                  ),
-                ),
-              ),
+              child: TimeText(time: c.time, format: formatEditorTime),
             ),
           ),
         ),
@@ -1635,7 +1615,7 @@ class _TextPromptDialogState extends State<_TextPromptDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => AppDialog(
     title: Text(widget.title),
     content: TextField(
       controller: _name,
@@ -2417,8 +2397,9 @@ class _HistoryToastState extends State<HistoryToast> {
       duration: Duration(milliseconds: _visible ? 120 : 300),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: scheme.inverseSurface.withValues(alpha: 0.92),
-          borderRadius: BorderRadius.circular(20),
+          color: scheme.surfaceContainerHigh.withValues(alpha: 0.96),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
           boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 2))],
         ),
         child: Padding(
@@ -2426,14 +2407,14 @@ class _HistoryToastState extends State<HistoryToast> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(s.undo ? Icons.undo : Icons.redo, size: 18, color: scheme.onInverseSurface),
+              Icon(s.undo ? Icons.undo : Icons.redo, size: 18, color: scheme.onSurface),
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
                   text(s),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: scheme.onInverseSurface, fontSize: 14),
+                  style: TextStyle(color: scheme.onSurface, fontSize: 14),
                 ),
               ),
             ],
@@ -2474,7 +2455,7 @@ class _MoveNotesDialogState extends State<_MoveNotesDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return AppDialog(
       title: Text(widget.all ? 'Move all notes in time' : 'Move selection in time'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -2646,7 +2627,7 @@ class _CopyHitsoundsDialogState extends State<_CopyHitsoundsDialog> {
   @override
   Widget build(BuildContext context) {
     final small = Theme.of(context).textTheme.bodySmall;
-    return AlertDialog(
+    return AppDialog(
       title: const Text('Copy hitsounds'),
       content: SizedBox(
         width: 420,

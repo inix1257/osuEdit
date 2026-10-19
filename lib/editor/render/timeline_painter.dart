@@ -295,18 +295,11 @@ class TimelinePainter extends CustomPainter {
               RRect.fromLTRBR(x0, objY - objR, x1, objY + objR, Radius.circular(objR)).inflate(3),
               Paint()..color = _selection);
         }
-        // Clipped to a little past the screen: a long body's layer stays small.
+        // Clipped to a little past the screen.
         final b0 = math.max(x0, -objR * 2), b1 = math.min(x1, w + objR * 2);
         if (b1 > b0) {
-          PlayfieldPainter.paintSliderBody(
-              canvas,
-              Path()
-                ..moveTo(b0, objY)
-                ..lineTo(b1, objY),
-              objR,
-              o is SliderObject ? controller.sliderTrackColour ?? colour : colour,
-              controller.sliderBorderColour,
-              bounds: Rect.fromLTRB(b0 - objR, objY - objR, b1 + objR, objY + objR));
+          PlayfieldPainter.paintStraightBody(canvas, b0, b1, objY, objR,
+              o is SliderObject ? controller.sliderTrackColour ?? colour : colour, controller.sliderBorderColour);
         }
         // The tail, then the repeats (earlier ones on top), tappable to pick
         // their hitsounds like stable.

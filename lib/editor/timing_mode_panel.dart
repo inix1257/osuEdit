@@ -316,12 +316,15 @@ class _BeatLamps extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return CustomPaint(
-      painter: _BeatLampsPainter(
-        controller,
-        off: scheme.surfaceContainerHighest,
-        on: scheme.primary,
-        accent: const Color(0xFFFFB300),
+    // Own layer: repainting every frame doesn't re-record the panel.
+    return RepaintBoundary(
+      child: CustomPaint(
+        painter: _BeatLampsPainter(
+          controller,
+          off: scheme.surfaceContainerHighest,
+          on: scheme.primary,
+          accent: const Color(0xFFFFB300),
+        ),
       ),
     );
   }

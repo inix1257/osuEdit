@@ -64,6 +64,37 @@ void main() {
     expect(c.canUndo, isFalse);
   });
 
+  test('a box held while time moves (playback) keeps objects that disappeared', () {
+    final c = _sample();
+    c.seek(1000);
+    final objs = c.beatmap.hitObjects;
+    c.beginBoxSelect(const Vec2(0, 0));
+    c.updateBoxSelect(const Vec2(512, 384));
+    expect(c.selection, isNot(contains(objs[6])));
+    var notified = 0;
+    c.addListener(() => notified++);
+    final seen = <HitObject>{};
+    for (var t = 1000.0; t <= 6000; t += 16) {
+      c.time.value = t; // no pointer movement: the held box catches new objects
+      seen.addAll(c.visibleObjectsAt(t).where((h) => h is! Spinner));
+    }
+    expect(c.visibleObjectsAt(6000), isNot(contains(objs[0])));
+    expect(c.selection, unorderedEquals(seen));
+    expect(c.selection, containsAll([objs[0], objs[6]]));
+    expect(notified, lessThan(20)); // only when the selection changed
+    c.endBoxSelect();
+    expect(c.selection, unorderedEquals(seen));
+
+    // Shrinking the box still releases the objects that are shown.
+    c.beginBoxSelect(const Vec2(0, 0));
+    c.updateBoxSelect(const Vec2(512, 384));
+    c.updateBoxSelect(const Vec2(1, 1));
+    expect(c.selection.intersection(c.visibleObjectsAt(c.time.value).toSet()), isEmpty);
+    c.endBoxSelect();
+    c.time.value = 1000; // the listener is gone after the drag
+    expect(c.selection, isNot(contains(objs[0])));
+  });
+
   test('copy / paste at the snapped current time keeps spacing; undo restores the file', () {
     final c = _sample();
     final src = c.serialize();

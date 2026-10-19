@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../app_fonts.dart';
+import '../../app_dialog.dart';
 
 /// What [GoToTimeDialog] was closed with: a time picked on the wheels, or
 /// a request for the manual (pasted timestamp) input instead.
@@ -72,7 +73,7 @@ class _GoToTimeDialogState extends State<GoToTimeDialog> {
   @override
   Widget build(BuildContext context) {
     final sep = Text(':', style: Theme.of(context).textTheme.titleLarge);
-    return AlertDialog(
+    return AppDialog(
       title: const Text('Go to time'),
       contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
       content: SizedBox(

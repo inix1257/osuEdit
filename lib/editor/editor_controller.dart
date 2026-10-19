@@ -2689,9 +2689,14 @@ class EditorController extends ChangeNotifier {
 
   // Box selection: a Select-tool drag that starts on empty playfield.
   // The selection updates live; additive keeps what was selected before.
+  // Like lazer, only objects shown at the current time are re-checked
+  // against the box: ones caught earlier in the drag stay selected after
+  // they disappear (dragging during playback sweeps them up), and objects
+  // that appear under a held box are caught as time moves.
   Vec2? _boxStart;
   Vec2? _boxEnd;
   List<HitObject> _boxBase = const [];
+  final Set<HitObject> _boxCaught = {};
 
   /// Corners of the box being dragged (osu!pixels), or null.
   (Vec2, Vec2)? get selectionBox {
@@ -2703,36 +2708,53 @@ class EditorController extends ChangeNotifier {
     _selectedPoint = null;
     _boxStart = _boxEnd = pos;
     _boxBase = additive ? selection.toList() : const [];
-    _applyBox();
+    _boxCaught.clear();
+    time
+      ..removeListener(_onBoxTime)
+      ..addListener(_onBoxTime);
+    _applyBox(notify: true);
   }
+
+  void _onBoxTime() => _applyBox();
 
   void updateBoxSelect(Vec2 pos) {
     if (_boxStart == null) return;
     _boxEnd = pos;
-    _applyBox();
+    _applyBox(notify: true);
   }
 
   void endBoxSelect() {
     if (_boxStart == null) return;
+    time.removeListener(_onBoxTime);
     _boxStart = _boxEnd = null;
     _boxBase = const [];
+    _boxCaught.clear();
     notifyListeners();
   }
 
-  /// Objects shown at the current time whose head is inside the box
-  /// (spinners are selected from the timeline).
-  void _applyBox() {
-    final (a, b) = selectionBox!;
+  /// Objects shown at the current time whose head is inside the box are
+  /// caught, shown ones outside it are released; hidden ones keep their
+  /// state (spinners are selected from the timeline). On a time change it
+  /// only notifies when the selection changed, so a held box during
+  /// playback doesn't rebuild every frame.
+  void _applyBox({bool notify = false}) {
+    final box = selectionBox;
+    if (box == null) return;
+    final (a, b) = box;
     final minX = math.min(a.x, b.x), maxX = math.max(a.x, b.x);
     final minY = math.min(a.y, b.y), maxY = math.max(a.y, b.y);
-    selection
-      ..clear()
-      ..addAll(_boxBase);
+    var changed = false;
     for (final h in visibleObjectsAt(time.value)) {
       if (h is Spinner) continue;
       final p = displayPositionOf(h);
-      if (p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY) selection.add(h);
+      final inside = p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY;
+      changed |= inside ? _boxCaught.add(h) : _boxCaught.remove(h);
     }
+    if (!changed && !notify) return;
+    selection
+      ..clear()
+      ..addAll(_boxBase)
+      ..addAll(_boxCaught);
     notifyListeners();
   }
 

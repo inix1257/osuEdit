@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:osu_edit/core/core.dart';
 import 'package:osu_edit/editor/editor_controller.dart';
 import 'package:osu_edit/editor/editor_screen.dart';
+import 'package:osu_edit/editor/widgets/time_text.dart';
 import 'package:osu_edit/platform/beatmap_file_service.dart';
 
 EditorController _controller() {
@@ -121,7 +122,10 @@ void main() {
 
     final c = _controller();
     await tester.pumpWidget(MaterialApp(home: EditorScreen(controller: c)));
-    expect(find.text('00:01:000'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate((w) => w is CustomPaint && w.painter is TimeTextPainter && (w.painter as TimeTextPainter).text == '00:01:000'),
+      findsOneWidget,
+    );
 
     // Seek into the slider/spinner region and render.
     c.seek(2500);

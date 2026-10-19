@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import 'app_fonts.dart';
 import 'home/home_screen.dart';
+import 'platform/frame_stats.dart';
+import 'toast.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -10,6 +12,7 @@ void main() {
   // stay hidden and only reappear transiently on an edge swipe.
   SystemChrome.setPreferredOrientations(const [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  FrameStats.install();
   runApp(const OsuEditApp());
 }
 
@@ -32,6 +35,7 @@ class OsuEditApp extends StatelessWidget {
         fontFamily: kUiFont,
       ),
       theme: ThemeData(colorSchemeSeed: const Color(0xFFFF66AA), useMaterial3: true, fontFamily: kUiFont),
+      builder: (context, child) => ToastHost(child: child),
       home: home,
     );
   }

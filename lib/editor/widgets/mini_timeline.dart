@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -272,6 +273,11 @@ class MiniTimelinePainter extends CustomPainter {
   static const _fineBand = Color(0x40FFFFFF);
   static const _fineAnchor = Color(0xCCFFFFFF);
 
+  /// The bar without its playhead, as last recorded, and what it was
+  /// recorded for (map data, graph, size).
+  static ui.Picture? _markers;
+  static Object? _markersKey;
+
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width, h = size.height;
@@ -279,8 +285,21 @@ class MiniTimelinePainter extends CustomPainter {
     double x(double t) => ((t - data.start) / span).clamp(0.0, 1.0) * w;
 
     canvas.clipRect(Offset.zero & size);
-    canvas.drawRRect(RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(4)), Paint()..color = _bg);
-    paintMarkers(canvas, h, x, barWidth: w);
+    // Everything but the playhead changes only with the map: recorded once
+    // (thousands of marker lines re-recorded every frame of playback were
+    // paint time and a display list for the GC to free each frame).
+    final key = (data, difficulty?.value, w, h);
+    var markers = _markers;
+    if (markers == null || key != _markersKey) {
+      markers?.dispose();
+      final recorder = ui.PictureRecorder();
+      final c = Canvas(recorder);
+      c.drawRRect(RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(4)), Paint()..color = _bg);
+      paintMarkers(c, h, x, barWidth: w);
+      markers = _markers = recorder.endRecording();
+      _markersKey = key;
+    }
+    canvas.drawPicture(markers);
     final px = x(time.value);
     final f = fine?.value;
     if (f != null) _paintFine(canvas, px, f, h);

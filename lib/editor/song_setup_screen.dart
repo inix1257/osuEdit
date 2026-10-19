@@ -5,6 +5,8 @@ import 'editor_controller.dart';
 import 'editor_screen.dart' show formatEditorTime;
 import 'widgets/form_fields.dart';
 import 'widgets/setup_style.dart';
+import '../toast.dart';
+import '../app_dialog.dart';
 
 /// The editor's Song setup mode: metadata, the set's audio / background
 /// files, difficulty settings and preview time. Every field commits on its
@@ -100,10 +102,9 @@ class SongSetupPanel extends StatelessWidget {
   void _setPreview(int ms) => c.setValues('Song setup', [(SectionNames.general, 'PreviewTime', '$ms')]);
 
   Future<void> _syncSet(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => AppDialog(
         title: const Text('Copy metadata to other difficulties?'),
         content: const Text(
           'Artist, title, creator, source and tags of this difficulty are written to the '
@@ -118,9 +119,9 @@ class SongSetupPanel extends StatelessWidget {
     if (ok != true) return;
     try {
       final n = await c.syncMetadataToSet();
-      messenger.showSnackBar(SnackBar(content: Text('Updated metadata in $n other difficult${n == 1 ? 'y' : 'ies'}')));
+      AppToast.show('Updated metadata in $n other difficult${n == 1 ? 'y' : 'ies'}');
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Could not update other difficulties: $e')));
+      AppToast.show('Could not update other difficulties: $e');
     }
   }
 
@@ -766,7 +767,7 @@ class _ComboColourDialogState extends State<_ComboColourDialog> {
   Widget build(BuildContext context) {
     final c = _colour;
     // Compact: fits a landscape phone (about 380dp tall) without scrolling.
-    return AlertDialog(
+    return AppDialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
       titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
       contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 0),

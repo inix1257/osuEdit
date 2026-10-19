@@ -11,6 +11,7 @@ import '../editor_controller.dart';
 import '../render/hitsound_painter.dart';
 import '../render/timeline_painter.dart';
 import 'form_fields.dart';
+import '../../app_dialog.dart';
 
 /// The Hitsound mode's screen: layer names on the left, then the hitsound
 /// timeline and its layers ([HitsoundPainter]). It shows the same time and
@@ -391,7 +392,7 @@ class _HitsoundSampleDialogState extends State<HitsoundSampleDialog> {
     final ownVolume = !object || volume != 0;
     return Theme(
       data: compactFormTheme(Theme.of(context)),
-      child: AlertDialog(
+      child: AppDialog(
         title: Text(_title, style: Theme.of(context).textTheme.titleMedium),
         content: SizedBox(
           width: 300,

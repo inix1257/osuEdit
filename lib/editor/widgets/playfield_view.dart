@@ -8,6 +8,7 @@ import '../../core/core.dart';
 import '../editor_controller.dart';
 import '../render/playfield_painter.dart';
 import '../render/playfield_transform.dart';
+import '../../toast.dart';
 
 /// Playfield canvas + touch/mouse interaction.
 ///
@@ -817,14 +818,10 @@ class _PlayfieldViewState extends State<PlayfieldView> {
           child: InkWell(
             onTap: () {
               c.scaleLocksAspect = !locked;
-              ScaffoldMessenger.maybeOf(context)
-                ?..hideCurrentSnackBar()
-                ..showSnackBar(SnackBar(
-                  content: Text(locked ? 'Aspect ratio unlocked: width and height scale separately' : 'Aspect ratio locked'),
-                  behavior: SnackBarBehavior.floating,
-                  width: 300,
-                  duration: const Duration(seconds: 2),
-                ));
+              AppToast.show(
+                locked ? 'Aspect ratio unlocked: width and height scale separately' : 'Aspect ratio locked',
+                duration: const Duration(seconds: 2),
+              );
             },
             child: Icon(locked ? Icons.link : Icons.link_off,
                 size: 18, color: locked ? const Color(0xFF000000) : const Color(0xFFFFFFFF)),

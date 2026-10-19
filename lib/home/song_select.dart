@@ -712,16 +712,20 @@ class _LoadingOverlayState extends State<LoadingOverlay> {
                         height: 38,
                         child: CircularProgressIndicator(strokeWidth: 4, color: color, backgroundColor: Colors.white12),
                       ),
-                      const SizedBox(height: 14),
-                      Text(o.message,
-                          style: TextStyle(
-                              color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 0.3)),
-                      const SizedBox(height: 4),
-                      Text(o.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.white70, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                      if (o.message.isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        Text(o.message,
+                            style: TextStyle(
+                                color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 0.3)),
+                      ],
+                      if (o.title.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(o.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.white70, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                      ],
                       if (o.version.isNotEmpty)
                         Text('[${o.version}]',
                             maxLines: 1,

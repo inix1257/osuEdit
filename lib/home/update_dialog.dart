@@ -4,27 +4,27 @@ import 'package:flutter/material.dart';
 
 import '../platform/app_updater.dart';
 import '../platform/web_links.dart';
+import '../toast.dart';
+import '../app_dialog.dart';
 
 /// Looks for a newer release and offers it. [manual] (the menu item) also
 /// says "up to date" / "couldn't check"; the automatic check on start stays
 /// silent unless there is something to install.
 Future<void> checkForUpdates(BuildContext context, {bool manual = false}) async {
-  final messenger = ScaffoldMessenger.of(context);
   final UpdateInfo? info;
   try {
     info = await AppUpdater.check(manual: manual);
   } catch (_) {
-    if (manual) messenger.showSnackBar(const SnackBar(content: Text('Could not check for updates')));
+    if (manual) AppToast.show('Could not check for updates');
     return;
   }
   if (!context.mounted) return;
   if (info == null) {
     if (manual) {
       final v = await AppUpdater.currentVersion();
-      messenger.showSnackBar(SnackBar(
-          content: Text(AppUpdater.isDevVersion(v)
-              ? 'Development build: updates come from the computer, not from releases'
-              : "You're up to date${v == null ? '' : ' (v$v)'}")));
+      AppToast.show(AppUpdater.isDevVersion(v)
+          ? 'Development build: updates come from the computer, not from releases'
+          : "You're up to date${v == null ? '' : ' (v$v)'}");
     }
     return;
   }
@@ -46,7 +46,6 @@ class _UpdateDialogState extends State<_UpdateDialog> {
 
   Future<void> _update() async {
     final info = widget.info;
-    final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     setState(() {
       _progress = 0;
@@ -63,10 +62,10 @@ class _UpdateDialogState extends State<_UpdateDialog> {
           navigator.pop();
         case InstallResult.needsPermission:
           navigator.pop();
-          messenger.showSnackBar(const SnackBar(
-            content: Text('Allow installs from osuEdit in the settings that just opened, then check for updates again.'),
-            duration: Duration(seconds: 8),
-          ));
+          AppToast.show(
+            'Allow installs from osuEdit in the settings that just opened, then check for updates again.',
+            duration: const Duration(seconds: 8),
+          );
         case InstallResult.failed:
           setState(() {
             _progress = null;
@@ -88,7 +87,7 @@ class _UpdateDialogState extends State<_UpdateDialog> {
     final downloading = _progress != null;
     return PopScope(
       canPop: !downloading,
-      child: AlertDialog(
+      child: AppDialog(
         title: Text('Update available: v${info.version}'),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
@@ -110,7 +109,7 @@ class _UpdateDialogState extends State<_UpdateDialog> {
           ]),
         ),
         actions: downloading
-            ? null
+            ? const []
             : [
                 TextButton(
                   onPressed: () {
